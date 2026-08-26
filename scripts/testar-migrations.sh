@@ -36,11 +36,26 @@ docker run -d --name "$CONTAINER" \
   -e POSTGRES_PASSWORD=teste -e POSTGRES_DB="$DB" \
   -p 55432:5432 "$IMAGEM" >/dev/null
 
-for _ in $(seq 1 60); do
-  docker exec "$CONTAINER" pg_isready -U postgres -d "$DB" >/dev/null 2>&1 && break
+# O entrypoint do postgres sobe um servidor TEMPORÁRIO para inicializar e o
+# reinicia em seguida. `pg_isready` responde OK durante essa fase, e o schema
+# aplicado ali é perdido no restart. Por isso exigimos estabilidade: três
+# consultas reais bem-sucedidas, com intervalo.
+estavel=0
+for _ in $(seq 1 90); do
+  if docker exec "$CONTAINER" psql -U postgres -d "$DB" -tAc 'select 1' >/dev/null 2>&1; then
+    estavel=$((estavel + 1))
+    [ "$estavel" -ge 3 ] && break
+  else
+    estavel=0
+  fi
   sleep 1
 done
-verde "  container pronto ($IMAGEM)"
+if [ "$estavel" -lt 3 ]; then
+  vermelho "  Postgres não estabilizou a tempo."
+  docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+  exit 1
+fi
+verde "  container pronto e estável ($IMAGEM)"
 
 titulo "2. Baseline do schema existente (somente teste)"
 if psql_arquivo "$RAIZ/supabase/baseline/0000_baseline_existente_TESTE.sql" >/dev/null 2>/tmp/erro; then

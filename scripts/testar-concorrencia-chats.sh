@@ -30,10 +30,16 @@ docker info >/dev/null 2>&1 || { vermelho "Docker não está em execução."; ex
 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
 docker run -d --name "$CONTAINER" -e POSTGRES_PASSWORD=teste -e POSTGRES_DB="$DB" \
   postgres:17-alpine >/dev/null
-for _ in $(seq 1 60); do
-  docker exec "$CONTAINER" pg_isready -U postgres -d "$DB" >/dev/null 2>&1 && break
+# Mesma precaução do outro script: o postgres reinicia depois da inicialização,
+# e aplicar schema durante a fase temporária o perde silenciosamente.
+estavel=0
+for _ in $(seq 1 90); do
+  if docker exec "$CONTAINER" psql -U postgres -d "$DB" -tAc "select 1" >/dev/null 2>&1; then
+    estavel=$((estavel + 1)); [ "$estavel" -ge 3 ] && break
+  else estavel=0; fi
   sleep 1
 done
+[ "$estavel" -ge 3 ] || { vermelho "Postgres não estabilizou."; docker rm -f "$CONTAINER" >/dev/null 2>&1; exit 1; }
 
 psql_c < "$RAIZ/supabase/baseline/0000_baseline_existente_TESTE.sql" >/dev/null 2>&1
 for f in "$RAIZ"/supabase/migrations/*.sql; do

@@ -60,7 +60,31 @@ if (!resposta.ok) throw new Error(`Falha ao ler schema: HTTP ${resposta.status}`
 const openapi = await resposta.json();
 const defs = openapi.definitions || {};
 
-const tabelas = Object.entries(defs);
+/**
+ * O baseline representa o schema COMO ERA ANTES das nossas migrations.
+ *
+ * Depois que elas são aplicadas no Supabase, o endpoint passa a expor também as
+ * tabelas e views novas — e reconstruí-las aqui faria o teste recriar como
+ * TABELA aquilo que a migration cria como VIEW ("vw_tarefas_hoje is not a
+ * view"). Por isso a lista das 26 originais é explícita.
+ */
+const TABELAS_ORIGINAIS = new Set([
+  "empresas", "enderecos_empresa", "pessoas", "empresa_pessoas",
+  "canais_comunicacao", "grupos_comunicacao", "grupo_participantes",
+  "servicos", "planos_referencia", "plano_servicos", "contratos",
+  "contrato_servicos", "modelos_precificacao", "modelo_recursos_equipe",
+  "regras_precificacao_servicos", "precificacoes", "precificacao_itens",
+  "precificacao_componentes", "modelos_onboarding", "fases_onboarding",
+  "tarefas_modelo_onboarding", "onboardings", "tarefas_onboarding",
+  "evidencias_tarefa_onboarding", "alertas_onboarding", "historico_onboarding",
+]);
+
+const tabelas = Object.entries(defs).filter(([nome]) => TABELAS_ORIGINAIS.has(nome));
+
+const ausentes = [...TABELAS_ORIGINAIS].filter((t) => !defs[t]);
+if (ausentes.length > 0) {
+  throw new Error(`Tabelas originais não encontradas no schema: ${ausentes.join(", ")}`);
+}
 const partes = [];
 
 partes.push(`-- =============================================================================
@@ -112,6 +136,14 @@ end;
 $$;
 
 grant usage on schema public to anon, authenticated, service_role;
+
+-- No Supabase real o schema \`auth\` tem USAGE concedido a esses papéis, e
+-- \`auth.uid()\` é executável por eles. Sem isso, qualquer política de RLS que
+-- chame auth.uid() falha com "permission denied for schema auth" apenas no
+-- teste local — divergência que esconderia (ou inventaria) bugs.
+grant usage on schema auth to anon, authenticated, service_role;
+grant execute on function auth.uid() to anon, authenticated, service_role;
+grant select on auth.users to authenticated, service_role;
 `);
 
 // 1ª passada: tabelas sem FK (evita erro de ordem de criação).

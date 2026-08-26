@@ -181,6 +181,16 @@ insert into public.perfis_usuarios (usuario_id, nome, papel)
 values ('11111111-1111-1111-1111-111111111111', 'Usuário de Teste', 'analista')
 on conflict (usuario_id) do nothing;
 
+-- Segundo usuário, com papel de supervisor. Criado aqui (como superusuário) e
+-- não dentro dos blocos de RLS, onde a troca de papel impede escrever em auth.
+insert into auth.users (id, email)
+values ('33333333-3333-3333-3333-333333333333', 'supervisor@teste.local')
+on conflict do nothing;
+
+insert into public.perfis_usuarios (usuario_id, nome, papel)
+values ('33333333-3333-3333-3333-333333333333', 'Supervisor de Teste', 'supervisor')
+on conflict (usuario_id) do nothing;
+
 insert into public.empresas (id, codigo, razao_social, cnpj, matriz_filial, status_operacao, ativo)
 values ('22222222-2222-2222-2222-222222222222', 'TESTE01', 'Empresa Teste LTDA',
         '00000000000191', 'matriz', 'implantacao', true)
@@ -701,6 +711,73 @@ begin
   where d.defaclnamespace = 'public'::regnamespace
     and array_to_string(d.defaclacl, ',') like '%anon=%';
   perform pg_temp.checar('default privileges não concedem nada a anon', n = 0);
+end $$;
+
+do $$ begin raise notice E'\n--- 10. RLS simulada: isolamento de memória pessoal ---'; end $$;
+
+-- Simula dois usuários autenticados de verdade (assume o papel `authenticated`
+-- e define o claim que auth.uid() lê). Sem isso os testes rodam como superusuário
+-- e a RLS nem é avaliada — foi assim que um vazamento passou despercebido.
+do $$
+declare
+  dono   constant uuid := '11111111-1111-1111-1111-111111111111';
+  outro  constant uuid := '33333333-3333-3333-3333-333333333333';
+  mem    uuid;
+  viu    int;
+begin
+  -- O supervisor de teste já existe (criado com a massa de teste no início).
+  -- O caso que vazava: memória pessoal nasce 'candidata', e a cláusula que
+  -- deixava aprovadores verem a fila não excluía o escopo pessoal.
+  insert into public.memorias_agente
+    (tipo_memoria, escopo, usuario_id, titulo, conteudo, criada_por)
+  values ('preferencia', 'pessoal', dono, 'Prefiro respostas curtas',
+          'Responder de forma objetiva.', dono)
+  returning id into mem;
+
+  -- O dono enxerga a própria.
+  set local role authenticated;
+  perform set_config('request.jwt.claim.sub', dono::text, true);
+  select count(*) into viu from public.memorias_agente where id = mem;
+  reset role;
+  perform pg_temp.checar('o dono vê a própria memória pessoal', viu = 1);
+
+  -- O supervisor NÃO enxerga.
+  set local role authenticated;
+  perform set_config('request.jwt.claim.sub', outro::text, true);
+  select count(*) into viu from public.memorias_agente where id = mem;
+  reset role;
+  perform pg_temp.checar(
+    'supervisor NÃO vê memória pessoal de outro usuário',
+    viu = 0
+  );
+end $$;
+
+-- Conversa privada também não vaza por papel.
+do $$
+declare
+  dono   constant uuid := '11111111-1111-1111-1111-111111111111';
+  outro  constant uuid := '33333333-3333-3333-3333-333333333333';
+  conv   uuid;
+  viu    int;
+begin
+  -- O teste de limite deixou o usuário com 10 conversas ativas; libera espaço
+  -- para esta, senão o trigger (corretamente) recusa a inserção.
+  delete from public.conversas_agente where usuario_id = dono;
+
+  insert into public.conversas_agente (usuario_id, titulo)
+  values (dono, 'Conversa privada') returning id into conv;
+
+  set local role authenticated;
+  perform set_config('request.jwt.claim.sub', outro::text, true);
+  select count(*) into viu from public.conversas_agente where id = conv;
+  reset role;
+  perform pg_temp.checar('supervisor NÃO vê conversa de outro usuário', viu = 0);
+
+  set local role authenticated;
+  perform set_config('request.jwt.claim.sub', outro::text, true);
+  select count(*) into viu from public.mensagens_agente where conversa_id = conv;
+  reset role;
+  perform pg_temp.checar('supervisor NÃO vê mensagens de conversa alheia', viu = 0);
 end $$;
 
 do $$ begin raise notice E'\n=== TODOS OS TESTES PASSARAM ==='; end $$;

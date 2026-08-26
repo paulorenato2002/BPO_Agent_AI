@@ -2,7 +2,7 @@
 -- BASELINE DO SCHEMA EXISTENTE — SOMENTE PARA TESTE LOCAL
 --
 -- Gerado automaticamente por scripts/gerar-baseline-teste.mjs a partir do
--- endpoint OpenAPI do PostgREST em 2026-08-26T14:53:08.317Z.
+-- endpoint OpenAPI do PostgREST em 2026-08-26T19:10:43.039Z.
 --
 -- ⚠️  NUNCA APLIQUE ESTE ARQUIVO EM PRODUÇÃO.
 -- Ele reconstrói apenas colunas/tipos/PK/FK/NOT NULL/defaults, o suficiente para
@@ -47,6 +47,14 @@ end;
 $$;
 
 grant usage on schema public to anon, authenticated, service_role;
+
+-- No Supabase real o schema `auth` tem USAGE concedido a esses papéis, e
+-- `auth.uid()` é executável por eles. Sem isso, qualquer política de RLS que
+-- chame auth.uid() falha com "permission denied for schema auth" apenas no
+-- teste local — divergência que esconderia (ou inventaria) bugs.
+grant usage on schema auth to anon, authenticated, service_role;
+grant execute on function auth.uid() to anon, authenticated, service_role;
+grant select on auth.users to authenticated, service_role;
 
 
 create table if not exists public.grupos_comunicacao (

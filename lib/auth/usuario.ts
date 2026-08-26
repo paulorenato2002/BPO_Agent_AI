@@ -1,89 +1,110 @@
 import "server-only";
-import { cookies } from "next/headers";
-import { createClient } from "@supabase/supabase-js";
+import { criarClienteServidor } from "../supabase/cliente-servidor";
 import { supabaseAdmin } from "../supabase-admin";
 
 /**
  * Identificação do usuário autenticado.
  *
- * ESTADO ATUAL: `auth.users` está vazio e `perfis_usuarios` ainda não existe
- * (as migrations não foram aplicadas). Portanto `usuarioAtual()` devolve `null`
- * neste momento — de propósito. Nada aqui inventa um usuário: a interface
- * mostra o estado "não autenticado" em vez de um nome fictício.
+ * Regra de acesso: só usa o sistema quem tem, ao mesmo tempo,
+ *   1. conta válida em `auth.users`;
+ *   2. perfil correspondente em `perfis_usuarios`;
+ *   3. `ativo = true`.
  *
- * Quando houver login configurado, o token do Supabase Auth chega pelo cookie
- * e este módulo passa a resolver o usuário e o perfil interno normalmente.
+ * Um colaborador desativado continua com a conta e o histórico preservados,
+ * mas `usuarioAtual()` devolve null — perdendo acesso a rotas, conversas,
+ * consultas e ferramentas.
  */
 
 export type UsuarioAutenticado = {
   id: string;
   email: string | null;
-  /** Vem de perfis_usuarios; null se o usuário ainda não tem perfil interno. */
-  nome: string | null;
-  papel: string | null;
+  nome: string;
+  papel: PapelUsuario;
   departamento: string | null;
-  ativo: boolean;
 };
 
-const NOME_COOKIE_TOKEN = "sb-access-token";
+export type PapelUsuario =
+  | "administrador"
+  | "socio"
+  | "supervisor"
+  | "analista"
+  | "estagiaria";
+
+/** Papéis que podem aprovar memória de empresa/organizacional. */
+export const PAPEIS_APROVADORES: PapelUsuario[] = [
+  "administrador",
+  "socio",
+  "supervisor",
+];
+
+/** Papéis que podem convidar novos colaboradores. */
+export const PAPEIS_ADMINISTRATIVOS: PapelUsuario[] = ["administrador", "socio"];
+
+export type MotivoSemAcesso = "sem_sessao" | "sem_perfil" | "inativo";
+
+export type ResultadoUsuario =
+  | { autenticado: true; usuario: UsuarioAutenticado }
+  | { autenticado: false; motivo: MotivoSemAcesso };
 
 /**
- * Resolve o usuário a partir do token de acesso presente no cookie.
- * Retorna null quando não há sessão — sem lançar.
+ * Resolve o usuário da requisição atual, com o motivo quando não há acesso.
+ *
+ * Usa `getUser()` (valida o token no servidor do Supabase), nunca `getSession()`
+ * — que apenas lê o cookie e confiaria num token possivelmente forjado.
  */
-export async function usuarioAtual(): Promise<UsuarioAutenticado | null> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anon) return null;
-
-  const token = (await cookies()).get(NOME_COOKIE_TOKEN)?.value;
-  if (!token) return null;
-
+export async function usuarioAtualDetalhado(): Promise<ResultadoUsuario> {
   try {
-    // Cliente com a chave pública: valida o token do próprio usuário.
-    // A service_role NUNCA é usada para autenticar alguém.
-    const cliente = createClient(url, anon, {
-      auth: { persistSession: false, autoRefreshToken: false },
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    });
+    const supabase = await criarClienteServidor();
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
 
-    const { data, error } = await cliente.auth.getUser(token);
-    if (error || !data.user) return null;
+    if (error || !user) return { autenticado: false, motivo: "sem_sessao" };
 
-    const perfil = await carregarPerfil(data.user.id);
+    // O perfil é lido com service_role de propósito: a política de
+    // perfis_usuarios depende de op_usuario_interno_ativo(), que consulta a
+    // própria tabela. Ler pelo cliente do usuário aqui seria circular.
+    const { data: perfil } = await supabaseAdmin
+      .from("perfis_usuarios")
+      .select("nome, papel, departamento, ativo")
+      .eq("usuario_id", user.id)
+      .maybeSingle();
+
+    if (!perfil) return { autenticado: false, motivo: "sem_perfil" };
+    if (!perfil.ativo) return { autenticado: false, motivo: "inativo" };
 
     return {
-      id: data.user.id,
-      email: data.user.email ?? null,
-      nome: perfil?.nome ?? null,
-      papel: perfil?.papel ?? null,
-      departamento: perfil?.departamento ?? null,
-      ativo: perfil?.ativo ?? false,
+      autenticado: true,
+      usuario: {
+        id: user.id,
+        email: user.email ?? null,
+        nome: perfil.nome as string,
+        papel: perfil.papel as PapelUsuario,
+        departamento: (perfil.departamento as string | null) ?? null,
+      },
     };
   } catch {
-    return null;
+    return { autenticado: false, motivo: "sem_sessao" };
   }
 }
 
-async function carregarPerfil(usuarioId: string): Promise<{
-  nome: string;
-  papel: string;
-  departamento: string | null;
-  ativo: boolean;
-} | null> {
-  const { data, error } = await supabaseAdmin
-    .from("perfis_usuarios")
-    .select("nome, papel, departamento, ativo")
-    .eq("usuario_id", usuarioId)
-    .maybeSingle();
+/** Versão curta: o usuário, ou null. */
+export async function usuarioAtual(): Promise<UsuarioAutenticado | null> {
+  const r = await usuarioAtualDetalhado();
+  return r.autenticado ? r.usuario : null;
+}
 
-  // Tabela ainda não migrada (PGRST205) não é erro fatal aqui.
-  if (error || !data) return null;
+/** Lança se não houver usuário — para rotas que exigem autenticação. */
+export async function exigirUsuario(): Promise<UsuarioAutenticado> {
+  const usuario = await usuarioAtual();
+  if (!usuario) throw new Error("nao_autenticado");
+  return usuario;
+}
 
-  return {
-    nome: data.nome as string,
-    papel: data.papel as string,
-    departamento: (data.departamento as string | null) ?? null,
-    ativo: Boolean(data.ativo),
-  };
+export function temPapel(
+  usuario: UsuarioAutenticado,
+  ...papeis: PapelUsuario[]
+): boolean {
+  return papeis.includes(usuario.papel);
 }
