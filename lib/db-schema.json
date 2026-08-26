@@ -1,0 +1,2941 @@
+{
+  "grupos_comunicacao": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "empresa_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "empresas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "plataforma",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "nome",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "finalidade",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "identificador_externo",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "link_convite",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "principal",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "recebe_comunicados",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "permite_envio_arquivos",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "usado_para_aprovacoes",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "precificacoes": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "modelo_precificacao_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "modelos_precificacao",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "empresa_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "empresas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "contrato_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "contratos",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "codigo",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "nome",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "descricao",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "data_precificacao",
+      "tipo": "date",
+      "obrigatorio": true
+    },
+    {
+      "nome": "validade_ate",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "status",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "margem_lucro_percentual",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "aliquota_impostos_percentual",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "desconto_percentual",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "multiplicador_complexidade",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "custo_operacional_total",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "custo_sistemas_total",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "custo_total",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "valor_antes_desconto",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "valor_desconto",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "valor_final",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "aprovado_por_cliente",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "aprovado_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": false
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "grupo_simulacao_id",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "nome_cenario",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "valor_minimo_aplicado",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "orcamento_estimado_cliente",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "faixa_preco_minima",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "faixa_preco_maxima",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "valor_tecnico_calculado",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "valor_comercial_proposto",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "margem_efetiva_percentual",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "abaixo_do_piso",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "justificativa_excecao",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "estrategia_ajuste",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "custo_outros_componentes_total",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "acrescimos_total",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "descontos_fixos_total",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "valor_comercial_manual",
+      "tipo": "boolean",
+      "obrigatorio": true
+    }
+  ],
+  "enderecos_empresa": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "empresa_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "empresas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "tipo_endereco",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "logradouro",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "numero",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "complemento",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "bairro",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "cidade",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "uf",
+      "tipo": "character",
+      "obrigatorio": true
+    },
+    {
+      "nome": "cep",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "pais",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "principal",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "alertas_onboarding": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "onboarding_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "onboardings",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "tarefa_onboarding_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "tarefas_onboarding",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "tipo_alerta",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "severidade",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "status",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "titulo",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "mensagem",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "data_referencia",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "gerado_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "responsavel_usuario_id",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "responsavel_empresa_pessoa_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "empresa_pessoas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "origem",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "visualizado_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": false
+    },
+    {
+      "nome": "resolvido_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": false
+    },
+    {
+      "nome": "resolvido_por",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "descricao_resolucao",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "fases_onboarding": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "modelo_onboarding_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "modelos_onboarding",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "codigo",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "nome",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "descricao",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "objetivo",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ordem",
+      "tipo": "smallint",
+      "obrigatorio": true
+    },
+    {
+      "nome": "duracao_prevista_dias",
+      "tipo": "smallint",
+      "obrigatorio": false
+    },
+    {
+      "nome": "obrigatoria",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "bloqueia_proxima_fase",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "criterio_conclusao",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "contrato_servicos": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "contrato_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "contratos",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "servico_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "servicos",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "situacao_escopo",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "descricao_escopo",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "frequencia",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "quantidade_inclusa",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "unidade_medida",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "tipo_cobranca",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "valor_adicional",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "valor_unitario",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "prazo_entrega_dias_uteis",
+      "tipo": "smallint",
+      "obrigatorio": false
+    },
+    {
+      "nome": "responsabilidade_execucao",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "data_inicio",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "data_fim",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "modelos_onboarding": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "codigo",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "nome",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "versao",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "tipo_onboarding",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "descricao",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "objetivo",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "duracao_prevista_dias",
+      "tipo": "smallint",
+      "obrigatorio": false
+    },
+    {
+      "nome": "vigencia_inicio",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "vigencia_fim",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "status",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "modelo_padrao",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "historico_onboarding": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "onboarding_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "onboardings",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "tarefa_onboarding_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "tarefas_onboarding",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "tipo_evento",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "origem_evento",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "ator_usuario_id",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ator_empresa_pessoa_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "empresa_pessoas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "titulo",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "descricao",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "status_anterior",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "status_novo",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "fase_anterior_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "fases_onboarding",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "fase_nova_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "fases_onboarding",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "dados_anteriores",
+      "tipo": "jsonb",
+      "obrigatorio": false
+    },
+    {
+      "nome": "dados_novos",
+      "tipo": "jsonb",
+      "obrigatorio": false
+    },
+    {
+      "nome": "metadados",
+      "tipo": "jsonb",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "servicos": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "codigo",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "nome",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "categoria",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "descricao",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "unidade_cobranca",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "recorrente",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "permite_personalizacao",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "plano_servicos": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "plano_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "planos_referencia",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "servico_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "servicos",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "incluido_padrao",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "quantidade_inclusa",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "frequencia_padrao",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "descricao_escopo",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "onboardings": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "modelo_onboarding_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "modelos_onboarding",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "fase_atual_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "fases_onboarding",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "empresa_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "empresas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "pessoa_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "pessoas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "contrato_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "contratos",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "codigo",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "nome",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "tipo_onboarding",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "status",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "prioridade",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "data_inicio",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "data_prevista_conclusao",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "data_conclusao",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "progresso_percentual",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "responsavel_geral_id",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "motivo_pausa",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "motivo_cancelamento",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "planos_referencia": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "codigo",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "nome",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "descricao",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "publico_alvo",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "nivel",
+      "tipo": "smallint",
+      "obrigatorio": true
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "tarefas_modelo_onboarding": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "fase_onboarding_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "fases_onboarding",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "codigo",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "nome",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "descricao",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ordem",
+      "tipo": "smallint",
+      "obrigatorio": true
+    },
+    {
+      "nome": "tipo_tarefa",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "responsavel_padrao",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "prazo_dias_apos_inicio_fase",
+      "tipo": "smallint",
+      "obrigatorio": true
+    },
+    {
+      "nome": "duracao_estimada_minutos",
+      "tipo": "smallint",
+      "obrigatorio": false
+    },
+    {
+      "nome": "instrucao_execucao",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "criterio_conclusao",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "obrigatoria",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "exige_evidencia",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "tipo_evidencia",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "tarefa_dependencia_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "tarefas_modelo_onboarding",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "permite_execucao_paralela",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "pode_ser_automatizada",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "empresa_pessoas": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "empresa_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "empresas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "pessoa_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "pessoas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "tipo_vinculo",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "cargo",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "departamento",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "funcao_principal",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "descricao_responsabilidades",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "nivel_hierarquico",
+      "tipo": "smallint",
+      "obrigatorio": false
+    },
+    {
+      "nome": "superior_vinculo_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "empresa_pessoas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "contato_principal",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "ordem_contato",
+      "tipo": "smallint",
+      "obrigatorio": false
+    },
+    {
+      "nome": "pode_aprovar",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "limite_aprovacao",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "data_inicio",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "data_fim",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "tarefas_onboarding": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "onboarding_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "onboardings",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "fase_onboarding_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "fases_onboarding",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "tarefa_modelo_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "tarefas_modelo_onboarding",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "tarefa_dependencia_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "tarefas_onboarding",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "codigo",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "nome",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "descricao",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ordem",
+      "tipo": "smallint",
+      "obrigatorio": true
+    },
+    {
+      "nome": "tipo_tarefa",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "status",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "prioridade",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "tipo_responsavel",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "responsavel_usuario_id",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "responsavel_empresa_pessoa_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "empresa_pessoas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "data_prevista",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "iniciada_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": false
+    },
+    {
+      "nome": "concluida_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": false
+    },
+    {
+      "nome": "duracao_estimada_minutos",
+      "tipo": "integer",
+      "obrigatorio": false
+    },
+    {
+      "nome": "duracao_real_minutos",
+      "tipo": "integer",
+      "obrigatorio": false
+    },
+    {
+      "nome": "instrucao_execucao",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "criterio_conclusao",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "obrigatoria",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "exige_evidencia",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "tipo_evidencia",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "evidencia_texto",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "evidencia_url",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "origem_tarefa",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "pessoas": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "nome",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "cpf",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "data_nascimento",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "email_principal",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "telefone_principal",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "modelo_recursos_equipe": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "modelo_precificacao_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "modelos_precificacao",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "codigo",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "nome",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "tipo_recurso",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "cargo_funcao",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "quantidade_pessoas",
+      "tipo": "smallint",
+      "obrigatorio": true
+    },
+    {
+      "nome": "custo_mensal_unitario",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "encargos_beneficios_unitario",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "outros_custos_unitario",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "horas_produtivas_mes_por_pessoa",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "custo_mensal_total_unitario",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "custo_total_mensal",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "horas_totais_mes",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "custo_hora",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "custo_minuto",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "regras_precificacao_servicos": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "modelo_precificacao_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "modelos_precificacao",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "servico_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "servicos",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "recurso_equipe_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "modelo_recursos_equipe",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "codigo",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "nome_atividade",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "descricao",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "metodo_calculo",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "unidade_medida",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "tempo_minutos_por_unidade",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "tempo_fixo_mensal_minutos",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "valor_fixo_mensal",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "quantidade_padrao",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "multiplicador_complexidade",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "canais_comunicacao": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "empresa_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "empresas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "empresa_pessoa_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "empresa_pessoas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "tipo_canal",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "nome_canal",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "valor",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "finalidade",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "principal",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "recebe_comunicados",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "permite_envio_arquivos",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "modelos_precificacao": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "codigo",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "nome",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "versao",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "descricao",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "margem_lucro_percentual",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "aliquota_impostos_percentual",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "desconto_maximo_percentual",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "horas_produtivas_mes_padrao",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "vigencia_inicio",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "vigencia_fim",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "status",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "modelo_padrao",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "valor_minimo_mensal_padrao",
+      "tipo": "numeric",
+      "obrigatorio": true
+    }
+  ],
+  "precificacao_componentes": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "precificacao_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "precificacoes",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "tipo_componente",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "natureza",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "descricao",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "fornecedor",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "quantidade",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "valor_unitario",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "meses_rateio",
+      "tipo": "smallint",
+      "obrigatorio": true
+    },
+    {
+      "nome": "periodicidade",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "valor_total",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "valor_mensal_equivalente",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "valor_impacto",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "origem_item",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "contratos": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "empresa_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "empresas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "plano_referencia_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "planos_referencia",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "numero_contrato",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "descricao",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "status",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "data_inicio",
+      "tipo": "date",
+      "obrigatorio": true
+    },
+    {
+      "nome": "data_fim",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "renovacao_automatica",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "valor_mensal",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "moeda",
+      "tipo": "character",
+      "obrigatorio": true
+    },
+    {
+      "nome": "dia_vencimento",
+      "tipo": "smallint",
+      "obrigatorio": false
+    },
+    {
+      "nome": "forma_pagamento",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "indice_reajuste",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "data_proximo_reajuste",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "horas_inclusas",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "grupo_participantes": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "grupo_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "grupos_comunicacao",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "empresa_pessoa_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "empresa_pessoas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "papel_no_grupo",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "assuntos_responsavel",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "administrador_grupo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "recebe_marcacao",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "ordem_acionamento",
+      "tipo": "smallint",
+      "obrigatorio": false
+    },
+    {
+      "nome": "data_entrada",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "data_saida",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "precificacao_itens": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "precificacao_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "precificacoes",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "regra_precificacao_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "regras_precificacao_servicos",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "servico_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "servicos",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "recurso_equipe_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "modelo_recursos_equipe",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "descricao_item",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "metodo_calculo",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "quantidade",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "unidade_medida",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "tempo_unitario_minutos",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "custo_minuto",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "valor_fixo",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "multiplicador_complexidade",
+      "tipo": "numeric",
+      "obrigatorio": true
+    },
+    {
+      "nome": "tempo_total_minutos",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "custo_operacional",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "custo_total_item",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "origem_item",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "evidencias_tarefa_onboarding": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "tarefa_onboarding_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "tarefas_onboarding",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "tipo_evidencia",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "titulo",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "descricao",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "texto_evidencia",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "url_evidencia",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "nome_arquivo",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "storage_bucket",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "storage_path",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "mime_type",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "tamanho_bytes",
+      "tipo": "bigint",
+      "obrigatorio": false
+    },
+    {
+      "nome": "confirmado",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "validada",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "validada_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": false
+    },
+    {
+      "nome": "validada_por",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "origem",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "empresas": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "codigo",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "razao_social",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "nome_fantasia",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "cnpj",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "situacao_cadastral",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "natureza_juridica",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "porte",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "matriz_filial",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "data_abertura",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "segmento",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "atividade_principal",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "regime_tributario",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "cliente_desde",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "status_operacao",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ]
+}
