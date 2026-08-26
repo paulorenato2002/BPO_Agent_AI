@@ -59,7 +59,7 @@ if (!url || !chave) {
       if (error && !/already exists/i.test(error.message)) throw error;
       ({ data: bucket } = await supabase.storage.getBucket(BUCKET));
     }
-    bucket ? ok(`bucket "${BUCKET}" acessível`) : falha("bucket não pôde ser criado/lido");
+    if (bucket) ok(`bucket "${BUCKET}" acessível`); else falha("bucket não pôde ser criado/lido");
 
     if (bucket?.public === true) {
       falha("bucket está PÚBLICO — documentos sensíveis ficariam expostos");
@@ -71,23 +71,22 @@ if (!url || !chave) {
     const { error: erroUpload } = await supabase.storage
       .from(BUCKET)
       .upload(caminho, conteudo, { contentType: "text/plain", upsert: false });
-    erroUpload ? falha(`upload: ${erroUpload.message}`) : ok("upload concluído");
+    if (erroUpload) falha(`upload: ${erroUpload.message}`);
+    else ok("upload concluído");
 
     // Existência
     const pasta = caminho.slice(0, caminho.lastIndexOf("/"));
     const nome = caminho.slice(caminho.lastIndexOf("/") + 1);
     const { data: lista } = await supabase.storage.from(BUCKET).list(pasta, { search: nome });
-    (lista ?? []).some((a) => a.name === nome)
-      ? ok("arquivo confirmado pelo provedor")
-      : falha("arquivo não apareceu na listagem");
+    if ((lista ?? []).some((a) => a.name === nome)) ok("arquivo confirmado pelo provedor");
+    else falha("arquivo não apareceu na listagem");
 
     // Não sobrescrever
     const { error: erroDup } = await supabase.storage
       .from(BUCKET)
       .upload(caminho, Buffer.from("outro"), { contentType: "text/plain", upsert: false });
-    erroDup
-      ? ok("upload duplicado é rejeitado (não sobrescreve)")
-      : falha("provedor aceitou sobrescrever silenciosamente");
+    if (erroDup) ok("upload duplicado é rejeitado (não sobrescreve)");
+    else falha("provedor aceitou sobrescrever silenciosamente");
 
     // Download + integridade
     const { data: baixado, error: erroDownload } = await supabase.storage
@@ -99,9 +98,8 @@ if (!url || !chave) {
       const hashBaixado = createHash("sha256")
         .update(Buffer.from(await baixado.arrayBuffer()))
         .digest("hex");
-      hashBaixado === hashEsperado
-        ? ok("download íntegro (hash confere)")
-        : falha("conteúdo baixado difere do enviado");
+      if (hashBaixado === hashEsperado) ok("download íntegro (hash confere)");
+      else falha("conteúdo baixado difere do enviado");
     }
 
     // URL assinada
@@ -113,26 +111,27 @@ if (!url || !chave) {
     } else {
       ok("URL assinada gerada");
       const r = await fetch(assinada.signedUrl);
-      r.ok ? ok("URL assinada funciona") : falha(`URL assinada retornou HTTP ${r.status}`);
+      if (r.ok) ok("URL assinada funciona"); else falha(`URL assinada retornou HTTP ${r.status}`);
     }
 
     // Acesso anônimo deve ser negado
     const publica = `${url}/storage/v1/object/public/${BUCKET}/${caminho}`;
     const rPublica = await fetch(publica);
-    rPublica.ok
-      ? falha("arquivo acessível publicamente sem autenticação!")
-      : ok(`acesso público negado (HTTP ${rPublica.status})`);
+    if (rPublica.ok) falha("arquivo acessível publicamente sem autenticação!");
+    else ok(`acesso público negado (HTTP ${rPublica.status})`);
 
     // Cópia
     const copia = caminho.replace("arquivo.txt", "copia.txt");
     const { error: erroCopia } = await supabase.storage.from(BUCKET).copy(caminho, copia);
-    erroCopia ? falha(`cópia: ${erroCopia.message}`) : ok("cópia entre caminhos funciona");
+    if (erroCopia) falha(`cópia: ${erroCopia.message}`);
+    else ok("cópia entre caminhos funciona");
 
     // Limpeza
     const { error: erroRemocao } = await supabase.storage
       .from(BUCKET)
       .remove([caminho, copia]);
-    erroRemocao ? falha(`limpeza: ${erroRemocao.message}`) : ok("arquivos de teste removidos");
+    if (erroRemocao) falha(`limpeza: ${erroRemocao.message}`);
+    else ok("arquivos de teste removidos");
   } catch (e) {
     falha(`exceção: ${e instanceof Error ? e.message : String(e)}`);
   }

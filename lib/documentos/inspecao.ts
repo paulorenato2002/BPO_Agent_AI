@@ -61,7 +61,6 @@ export function sanitizarNomeArquivo(nome: string): string {
   const semCaminho = nome.split(/[/\\]/).pop() ?? "";
   return semCaminho
     .replace(/\0/g, "")
-    // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u001f\u007f]/g, "")
     .replace(/^\.+/, "")
     .replace(/[<>:"|?*]/g, "_")

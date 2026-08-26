@@ -1,26 +1,152 @@
 @import "tailwindcss";
 
+/*
+ * Effective AI — sistema visual
+ *
+ * Design fixo (não inverte com o tema do sistema): barra lateral escura +
+ * área principal clara, como na referência. Isso é intencional — inverter a
+ * barra lateral quebraria a hierarquia visual do produto.
+ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Superfícies */
+  --fundo-app: #ffffff;
+  --fundo-conversa: #faf9f7;
+  --fundo-cartao: #ffffff;
+  --fundo-sutil: #f4f4f2;
+
+  /* Barra lateral (sempre escura) */
+  --lateral-fundo: #0b0f19;
+  --lateral-fundo-hover: #1a2030;
+  --lateral-fundo-ativo: #1e2536;
+  --lateral-texto: #e8eaed;
+  --lateral-texto-suave: #9aa3b2;
+  --lateral-borda: #1f2633;
+
+  /* Texto */
+  --texto: #1a1a1a;
+  --texto-suave: #6b7280;
+  --texto-fraco: #9ca3af;
+
+  /* Bordas */
+  --borda: #e5e5e3;
+  --borda-forte: #d4d4d2;
+
+  /* Ação */
+  --azul: #2563eb;
+  --azul-hover: #1d4ed8;
+  --azul-suave: #eff4ff;
+
+  /* Semânticos */
+  --verde: #16a34a;
+  --verde-suave: #e8f5ec;
+  --vermelho: #dc2626;
+  --vermelho-suave: #fdecec;
+  --ambar: #b45309;
+  --ambar-suave: #fdf3e3;
+
+  --raio: 12px;
+  --sombra-cartao: 0 1px 2px rgb(0 0 0 / 0.04), 0 1px 3px rgb(0 0 0 / 0.06);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-fundo-app: var(--fundo-app);
+  --color-fundo-conversa: var(--fundo-conversa);
+  --color-fundo-cartao: var(--fundo-cartao);
+  --color-fundo-sutil: var(--fundo-sutil);
+  --color-lateral-fundo: var(--lateral-fundo);
+  --color-lateral-fundo-hover: var(--lateral-fundo-hover);
+  --color-lateral-fundo-ativo: var(--lateral-fundo-ativo);
+  --color-lateral-texto: var(--lateral-texto);
+  --color-lateral-texto-suave: var(--lateral-texto-suave);
+  --color-lateral-borda: var(--lateral-borda);
+  --color-texto: var(--texto);
+  --color-texto-suave: var(--texto-suave);
+  --color-texto-fraco: var(--texto-fraco);
+  --color-borda: var(--borda);
+  --color-borda-forte: var(--borda-forte);
+  --color-azul: var(--azul);
+  --color-azul-hover: var(--azul-hover);
+  --color-azul-suave: var(--azul-suave);
+  --color-verde: var(--verde);
+  --color-verde-suave: var(--verde-suave);
+  --color-vermelho: var(--vermelho);
+  --color-vermelho-suave: var(--vermelho-suave);
+  --color-ambar: var(--ambar);
+  --color-ambar-suave: var(--ambar-suave);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  height: 100%;
+  /* A interface é clara por definição; evita que o navegador pinte controles
+     escuros por cima quando o SO está em dark mode. */
+  color-scheme: light;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--fundo-app);
+  color: var(--texto);
+  font-family: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Nenhum overflow horizontal, em nenhuma largura. */
+  overflow-x: hidden;
+}
+
+/* Foco visível e consistente para navegação por teclado. */
+:focus-visible {
+  outline: 2px solid var(--azul);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Barra de rolagem discreta na área clara. */
+.rolagem-suave {
+  scrollbar-width: thin;
+  scrollbar-color: var(--borda-forte) transparent;
+}
+.rolagem-suave::-webkit-scrollbar { width: 8px; height: 8px; }
+.rolagem-suave::-webkit-scrollbar-thumb {
+  background: var(--borda-forte);
+  border-radius: 4px;
+}
+.rolagem-suave::-webkit-scrollbar-track { background: transparent; }
+
+/* Versão escura, para a barra lateral. */
+.rolagem-escura {
+  scrollbar-width: thin;
+  scrollbar-color: #2b3346 transparent;
+}
+.rolagem-escura::-webkit-scrollbar { width: 8px; }
+.rolagem-escura::-webkit-scrollbar-thumb { background: #2b3346; border-radius: 4px; }
+.rolagem-escura::-webkit-scrollbar-track { background: transparent; }
+
+/*
+ * Barra lateral: drawer no mobile, coluna fixa no desktop.
+ *
+ * Classes próprias em vez dos utilitários de translate do Tailwind — as
+ * combinações `-translate-x-full` + `md:translate-x-0` conflitavam na cascata
+ * e a barra ficava visível no celular mesmo fechada. Aqui só há duas regras,
+ * na mesma media query, e a de "aberta" vem depois.
+ *
+ * Feito em CSS (e não com media query em JS) para funcionar já no HTML do
+ * servidor, sem depender de evento de resize.
+ */
+@media (max-width: 767px) {
+  .barra-lateral {
+    transform: translateX(-100%);
+  }
+  .barra-lateral-aberta {
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

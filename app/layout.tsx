@@ -13,8 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Agente BPO",
-  description: "Assistente de dados do BPO financeiro",
+  title: "Effective AI — Agente Operacional",
+  description:
+    "Agente operacional da Effective: consulta dados, organiza documentos e acompanha execuções.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
