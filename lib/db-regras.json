@@ -1,0 +1,541 @@
+{
+  "alertas_onboarding": {
+    "colunas": {
+      "origem": {
+        "valoresPermitidos": [
+          "sistema",
+          "usuario",
+          "agente",
+          "automacao",
+          "importacao"
+        ]
+      },
+      "severidade": {
+        "valoresPermitidos": [
+          "informativo",
+          "atencao",
+          "importante",
+          "critico"
+        ]
+      },
+      "status": {
+        "valoresPermitidos": [
+          "aberto",
+          "visualizado",
+          "resolvido",
+          "ignorado"
+        ]
+      },
+      "tipo_alerta": {
+        "valoresPermitidos": [
+          "tarefa_vencida",
+          "vence_hoje",
+          "aguardando_evidencia",
+          "tarefa_bloqueada",
+          "aguardando_cliente",
+          "aguardando_terceiro",
+          "onboarding_atrasado",
+          "manual",
+          "outro"
+        ]
+      }
+    },
+    "regras": [
+      "alertas_onboarding_resolucao_check: ((((status)::text <> 'resolvido'::text) OR (resolvido_em IS NOT NULL)))"
+    ]
+  },
+  "canais_comunicacao": {
+    "colunas": {
+      "valor": {
+        "formato": "^[0-9]{10,15}$"
+      },
+      "tipo_canal": {
+        "valoresPermitidos": [
+          "email",
+          "whatsapp",
+          "telefone",
+          "telegram",
+          "slack",
+          "outro"
+        ]
+      }
+    },
+    "regras": []
+  },
+  "contrato_servicos": {
+    "colunas": {
+      "frequencia": {
+        "valoresPermitidos": [
+          "diaria",
+          "semanal",
+          "quinzenal",
+          "mensal",
+          "bimestral",
+          "trimestral",
+          "semestral",
+          "anual",
+          "continua",
+          "sob_demanda",
+          "pontual"
+        ]
+      },
+      "responsabilidade_execucao": {
+        "valoresPermitidos": [
+          "bpo",
+          "cliente",
+          "compartilhada",
+          "terceiro"
+        ]
+      },
+      "situacao_escopo": {
+        "valoresPermitidos": [
+          "incluido",
+          "nao_incluido",
+          "adicional",
+          "cortesia"
+        ]
+      },
+      "tipo_cobranca": {
+        "valoresPermitidos": [
+          "incluso_no_mensal",
+          "mensal_adicional",
+          "por_unidade",
+          "por_hora",
+          "por_demanda",
+          "sem_cobranca"
+        ]
+      }
+    },
+    "regras": [
+      "contrato_servicos_datas_check: (((data_fim IS NULL) OR (data_inicio IS NULL) OR (data_fim >= data_inicio)))",
+      "contrato_servicos_prazo_check: (((prazo_entrega_dias_uteis IS NULL) OR (prazo_entrega_dias_uteis >= 0)))",
+      "contrato_servicos_quantidade_check: (((quantidade_inclusa IS NULL) OR (quantidade_inclusa >= (0)::numeric)))",
+      "contrato_servicos_valor_adicional_check: (((valor_adicional IS NULL) OR (valor_adicional >= (0)::numeric)))",
+      "contrato_servicos_valor_unitario_check: (((valor_unitario IS NULL) OR (valor_unitario >= (0)::numeric)))"
+    ]
+  },
+  "contratos": {
+    "colunas": {
+      "forma_pagamento": {
+        "valoresPermitidos": [
+          "boleto",
+          "pix",
+          "transferencia",
+          "debito_automatico",
+          "cartao",
+          "dinheiro",
+          "outro"
+        ]
+      },
+      "moeda": {
+        "formato": "^[A-Z]{3}$"
+      },
+      "status": {
+        "valoresPermitidos": [
+          "rascunho",
+          "ativo",
+          "suspenso",
+          "encerrado",
+          "cancelado"
+        ]
+      }
+    },
+    "regras": [
+      "contratos_datas_check: (((data_fim IS NULL) OR (data_fim >= data_inicio)))",
+      "contratos_dia_vencimento_check: (((dia_vencimento IS NULL) OR ((dia_vencimento >= 1) AND (dia_vencimento <= 31))))",
+      "contratos_horas_inclusas_check: (((horas_inclusas IS NULL) OR (horas_inclusas >= (0)::numeric)))",
+      "contratos_valor_mensal_check: ((valor_mensal >= (0)::numeric))"
+    ]
+  },
+  "empresa_pessoas": {
+    "colunas": {
+      "tipo_vinculo": {
+        "valoresPermitidos": [
+          "socio",
+          "administrador",
+          "diretor",
+          "gestor",
+          "funcionario",
+          "prestador",
+          "contador",
+          "fornecedor",
+          "cliente",
+          "representante",
+          "outro"
+        ]
+      }
+    },
+    "regras": [
+      "empresa_pessoas_datas_check: (((data_fim IS NULL) OR (data_inicio IS NULL) OR (data_fim >= data_inicio)))",
+      "empresa_pessoas_limite_aprovacao_check: (((limite_aprovacao IS NULL) OR (limite_aprovacao >= (0)::numeric)))",
+      "empresa_pessoas_nivel_hierarquico_check: (((nivel_hierarquico IS NULL) OR (nivel_hierarquico > 0)))",
+      "empresa_pessoas_ordem_contato_check: (((ordem_contato IS NULL) OR (ordem_contato > 0)))",
+      "empresa_pessoas_superior_diferente_check: (((superior_vinculo_id IS NULL) OR (superior_vinculo_id <> id)))"
+    ]
+  },
+  "empresas": {
+    "colunas": {
+      "cnpj": {
+        "formato": "^[0-9]{14}$"
+      },
+      "matriz_filial": {
+        "valoresPermitidos": [
+          "matriz",
+          "filial"
+        ]
+      },
+      "status_operacao": {
+        "valoresPermitidos": [
+          "implantacao",
+          "operacao",
+          "pausado",
+          "encerrado"
+        ]
+      }
+    },
+    "regras": []
+  },
+  "enderecos_empresa": {
+    "colunas": {
+      "cep": {
+        "formato": "^[0-9]{8}$"
+      },
+      "tipo_endereco": {
+        "valoresPermitidos": [
+          "estabelecimento",
+          "fiscal",
+          "operacional",
+          "correspondencia",
+          "filial",
+          "outro"
+        ]
+      },
+      "uf": {
+        "formato": "^[A-Z]{2}$"
+      }
+    },
+    "regras": []
+  },
+  "evidencias_tarefa_onboarding": {
+    "colunas": {
+      "origem": {
+        "valoresPermitidos": [
+          "usuario",
+          "agente",
+          "cliente",
+          "funcionario",
+          "automacao",
+          "importacao"
+        ]
+      },
+      "tipo_evidencia": {
+        "valoresPermitidos": [
+          "arquivo",
+          "link",
+          "texto",
+          "confirmacao",
+          "captura_tela",
+          "outro"
+        ]
+      }
+    },
+    "regras": [
+      "evidencias_tarefa_tamanho_check: (((tamanho_bytes IS NULL) OR (tamanho_bytes >= 0)))",
+      "evidencias_tarefa_validacao_check: (((validada = false) OR (validada_em IS NOT NULL)))"
+    ]
+  },
+  "fases_onboarding": {
+    "colunas": {},
+    "regras": [
+      "fases_onboarding_duracao_check: (((duracao_prevista_dias IS NULL) OR (duracao_prevista_dias >= 0)))",
+      "fases_onboarding_ordem_check: ((ordem > 0))"
+    ]
+  },
+  "grupo_participantes": {
+    "colunas": {},
+    "regras": [
+      "grupo_participantes_datas_check: (((data_saida IS NULL) OR (data_entrada IS NULL) OR (data_saida >= data_entrada)))",
+      "grupo_participantes_ordem_check: (((ordem_acionamento IS NULL) OR (ordem_acionamento > 0)))"
+    ]
+  },
+  "grupos_comunicacao": {
+    "colunas": {
+      "plataforma": {
+        "valoresPermitidos": [
+          "whatsapp",
+          "telegram",
+          "slack",
+          "teams",
+          "outro"
+        ]
+      }
+    },
+    "regras": []
+  },
+  "historico_onboarding": {
+    "colunas": {
+      "origem_evento": {
+        "valoresPermitidos": [
+          "sistema",
+          "usuario",
+          "agente",
+          "cliente",
+          "funcionario",
+          "automacao",
+          "importacao"
+        ]
+      },
+      "tipo_evento": {
+        "valoresPermitidos": [
+          "onboarding_criado",
+          "onboarding_iniciado",
+          "status_onboarding_alterado",
+          "fase_alterada",
+          "tarefa_criada",
+          "status_tarefa_alterado",
+          "evidencia_adicionada",
+          "responsavel_alterado",
+          "prazo_alterado",
+          "comentario",
+          "alerta",
+          "outro"
+        ]
+      }
+    },
+    "regras": [
+      "historico_onboarding_ator_check: ((num_nonnulls(ator_usuario_id, ator_empresa_pessoa_id) <= 1))"
+    ]
+  },
+  "modelo_recursos_equipe": {
+    "colunas": {
+      "tipo_recurso": {
+        "valoresPermitidos": [
+          "socio",
+          "gestor",
+          "analista",
+          "assistente",
+          "estagiario",
+          "terceirizado",
+          "outro"
+        ]
+      }
+    },
+    "regras": [
+      "modelo_recursos_equipe_custo_check: (((custo_mensal_unitario >= (0)::numeric) AND (encargos_beneficios_unitario >= (0)::numeric) AND (outros_custos_unitario >= (0)::numeric)))",
+      "modelo_recursos_equipe_horas_check: ((horas_produtivas_mes_por_pessoa > (0)::numeric))",
+      "modelo_recursos_equipe_quantidade_check: ((quantidade_pessoas > 0))"
+    ]
+  },
+  "modelos_onboarding": {
+    "colunas": {
+      "status": {
+        "valoresPermitidos": [
+          "rascunho",
+          "ativo",
+          "substituido",
+          "arquivado"
+        ]
+      },
+      "tipo_onboarding": {
+        "valoresPermitidos": [
+          "cliente",
+          "funcionario",
+          "outro"
+        ]
+      }
+    },
+    "regras": [
+      "modelos_onboarding_duracao_check: (((duracao_prevista_dias IS NULL) OR (duracao_prevista_dias > 0)))",
+      "modelos_onboarding_vigencia_check: (((vigencia_fim IS NULL) OR (vigencia_inicio IS NULL) OR (vigencia_fim >= vigencia_inicio)))"
+    ]
+  },
+  "modelos_precificacao": {
+    "colunas": {
+      "status": {
+        "valoresPermitidos": [
+          "rascunho",
+          "ativo",
+          "substituido",
+          "arquivado"
+        ]
+      }
+    },
+    "regras": [
+      "modelos_precificacao_desconto_check: (((desconto_maximo_percentual >= (0)::numeric) AND (desconto_maximo_percentual <= (100)::numeric)))",
+      "modelos_precificacao_horas_check: (((horas_produtivas_mes_padrao IS NULL) OR (horas_produtivas_mes_padrao > (0)::numeric)))",
+      "modelos_precificacao_impostos_check: (((aliquota_impostos_percentual >= (0)::numeric) AND (aliquota_impostos_percentual < (100)::numeric)))",
+      "modelos_precificacao_margem_check: (((margem_lucro_percentual >= (0)::numeric) AND (margem_lucro_percentual < (100)::numeric)))",
+      "modelos_precificacao_margem_imposto_check: (((margem_lucro_percentual + aliquota_impostos_percentual) < (100)::numeric))",
+      "modelos_precificacao_valor_minimo_check: ((valor_minimo_mensal_padrao >= (0)::numeric))",
+      "modelos_precificacao_vigencia_check: (((vigencia_fim IS NULL) OR (vigencia_inicio IS NULL) OR (vigencia_fim >= vigencia_inicio)))"
+    ]
+  },
+  "onboardings": {
+    "colunas": {
+      "prioridade": {
+        "valoresPermitidos": [
+          "baixa",
+          "normal",
+          "alta",
+          "urgente"
+        ]
+      },
+      "status": {
+        "valoresPermitidos": [
+          "nao_iniciado",
+          "em_andamento",
+          "pausado",
+          "concluido",
+          "cancelado"
+        ]
+      },
+      "tipo_onboarding": {
+        "valoresPermitidos": [
+          "cliente",
+          "funcionario",
+          "outro"
+        ]
+      }
+    },
+    "regras": [
+      "onboardings_cancelamento_check: ((((status)::text <> 'cancelado'::text) OR (NULLIF(TRIM(BOTH FROM motivo_cancelamento), ''::text) IS NOT NULL)))",
+      "onboardings_conclusao_check: (((data_conclusao IS NULL) OR (data_inicio IS NULL) OR (data_conclusao >= data_inicio)))",
+      "onboardings_datas_check: (((data_prevista_conclusao IS NULL) OR (data_inicio IS NULL) OR (data_prevista_conclusao >= data_inicio)))",
+      "onboardings_destino_check: (((((tipo_onboarding)::text = 'cliente'::text) AND (empresa_id IS NOT NULL) AND (pessoa_id IS NULL)) OR (((tipo_onboarding)::text = 'funcionario'::text) AND (pessoa_id IS NOT NULL) AND (empresa_id IS NULL)) OR ((tipo_onboarding)::text = 'outro'::text)))",
+      "onboardings_pausa_check: ((((status)::text <> 'pausado'::text) OR (NULLIF(TRIM(BOTH FROM motivo_pausa), ''::text) IS NOT NULL)))",
+      "onboardings_progresso_check: (((progresso_percentual >= (0)::numeric) AND (progresso_percentual <= (100)::numeric)))"
+    ]
+  },
+  "pessoas": {
+    "colunas": {
+      "cpf": {
+        "formato": "^[0-9]{11}$"
+      },
+      "email_principal": {
+        "formato": "^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$"
+      }
+    },
+    "regras": []
+  },
+  "plano_servicos": {
+    "colunas": {
+      "frequencia_padrao": {
+        "valoresPermitidos": [
+          "diaria",
+          "semanal",
+          "quinzenal",
+          "mensal",
+          "bimestral",
+          "trimestral",
+          "semestral",
+          "anual",
+          "continua",
+          "sob_demanda",
+          "pontual"
+        ]
+      }
+    },
+    "regras": [
+      "plano_servicos_quantidade_check: (((quantidade_inclusa IS NULL) OR (quantidade_inclusa >= (0)::numeric)))"
+    ]
+  },
+  "planos_referencia": {
+    "colunas": {},
+    "regras": [
+      "planos_referencia_nivel_check: ((nivel > 0))"
+    ]
+  },
+  "precificacao_componentes": {
+    "colunas": {
+      "natureza": {
+        "valoresPermitidos": [
+          "custo",
+          "acrescimo",
+          "desconto"
+        ]
+      },
+      "origem_item": {
+        "valoresPermitidos": [
+          "manual",
+          "modelo",
+          "importado"
+        ]
+      },
+      "periodicidade": {
+        "valoresPermitidos": [
+          "mensal",
+          "trimestral",
+          "semestral",
+          "anual",
+          "pontual",
+          "sob_demanda"
+        ]
+      },
+      "tipo_componente": {
+        "valoresPermitidos": [
+          "sistema",
+          "licenca",
+          "plataforma",
+          "custo_administrativo",
+          "terceiro",
+          "taxa",
+          "acrescimo",
+          "desconto",
+          "outro"
+        ]
+      }
+    },
+    "regras": [
+      "precificacao_componentes_quantidade_check: ((quantidade >= (0)::numeric))",
+      "precificacao_componentes_rateio_check: ((meses_rateio > 0))",
+      "precificacao_componentes_valor_check: ((valor_unitario >= (0)::numeric))"
+    ]
+  },
+  "precificacao_itens": {
+    "colunas": {
+      "metodo_calculo": {
+        "valoresPermitidos": [
+          "tempo",
+          "valor_fixo",
+          "hibrido"
+        ]
+      },
+      "origem_item": {
+        "valoresPermitidos": [
+          "regra",
+          "manual",
+          "importado"
+        ]
+      }
+    },
+    "regras": [
+      "precificacao_itens_complexidade_check: ((multiplicador_complexidade > (0)::numeric))",
+      "precificacao_itens_custo_minuto_check: (((custo_minuto IS NULL) OR (custo_minuto >= (0)::numeric)))",
+      "precificacao_itens_quantidade_check: ((quantidade >= (0)::numeric))",
+      "precificacao_itens_tempo_check: (((tempo_unitario_minutos IS NULL) OR (tempo_unitario_minutos >= (0)::numeric)))",
+      "precificacao_itens_valor_fixo_check: ((valor_fixo >= (0)::numeric))"
+    ]
+  },
+  "precificacoes": {
+    "colunas": {
+      "estrategia_ajuste": {
+        "valoresPermitidos": [
+          "reduzir_margem",
+          "aumentar_margem",
+          "reduzir_escopo",
+          "aumentar_escopo",
+          "separar_adicionais",
+          "desconto_comercial",
+          "excecao_estrategica",
+          "sem_ajuste"
+        ]
+      }
+    },
+    "regras": [
+      "precificacoes_complexidade_check: ((multiplicador_complexidade > (0)::numeric))",
+      "precificacoes_excecao_piso_check: (((abaixo_do_piso = false) OR (justificativa_excecao IS NOT NULL)))",
+      "precificacoes_faixa_preco_check: (((faixa_preco_minima IS NULL) OR (faixa_preco_maxima IS NULL) OR (faixa_preco_maxima >= faixa_preco_minima)))",
+      "precificacoes_margem_imposto_check: (((margem_lucro_percentual + aliquota_impostos_percentual) < (100)::numeric))"
+    ]
+  }
+}

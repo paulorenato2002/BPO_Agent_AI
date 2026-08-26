@@ -2,6 +2,7 @@ import "server-only";
 import type { ChatCompletionFunctionTool } from "openai/resources/chat/completions";
 import { supabaseAdmin } from "./supabase-admin";
 import schema from "./db-schema.json";
+import regras from "./db-regras.json";
 
 type SchemaColumn = {
   nome: string;
@@ -9,9 +10,19 @@ type SchemaColumn = {
   obrigatorio: boolean;
   pk?: boolean;
   fk?: { tabela: string; coluna: string };
+  /** Valores aceitos pelo CHECK da coluna (ex: matriz_filial). */
+  valoresPermitidos?: string[];
+  /** Regex que o valor precisa satisfazer (ex: cnpj com 14 dígitos). */
+  formato?: string;
+};
+
+type RegrasTabela = {
+  colunas: Record<string, { valoresPermitidos?: string[]; formato?: string }>;
+  regras: string[];
 };
 
 const TABLE_SCHEMA = schema as Record<string, SchemaColumn[]>;
+const TABLE_REGRAS = regras as Record<string, RegrasTabela>;
 const TABLE_NAMES = Object.keys(TABLE_SCHEMA);
 const MAX_ROWS = 100;
 
@@ -38,7 +49,7 @@ export const dbTools: ChatCompletionFunctionTool[] = [
     function: {
       name: "descrever_tabela",
       description:
-        "Retorna as colunas de uma tabela (nome, tipo, se é obrigatória, chave primária e chaves estrangeiras).",
+        "Retorna as colunas de uma tabela: nome, tipo, obrigatoriedade, chave primária, chaves estrangeiras e — quando existirem — os valoresPermitidos (lista fechada aceita pelo banco), o formato (regex) e regras que envolvem mais de uma coluna. SEMPRE consulte antes de inserir ou atualizar, e use exatamente um dos valoresPermitidos quando a coluna tiver essa lista.",
       parameters: {
         type: "object",
         properties: {
@@ -173,7 +184,23 @@ export async function executeDbTool(
     case "descrever_tabela": {
       const tabela = String(args.tabela);
       assertTabelaValida(tabela);
-      return { tabela, colunas: TABLE_SCHEMA[tabela] };
+
+      // Junta o schema (colunas/tipos, vindo do PostgREST) com os CHECK
+      // constraints do banco. Sem isso o modelo chuta valores plausíveis
+      // ("MATRIZ") e só descobre o valor certo depois de tomar erro.
+      const regrasTabela = TABLE_REGRAS[tabela];
+      const colunas = TABLE_SCHEMA[tabela].map((coluna) => {
+        const extra = regrasTabela?.colunas[coluna.nome];
+        return extra ? { ...coluna, ...extra } : coluna;
+      });
+
+      return {
+        tabela,
+        colunas,
+        ...(regrasTabela?.regras.length
+          ? { regrasAdicionais: regrasTabela.regras }
+          : {}),
+      };
     }
 
     case "consultar_dados": {
