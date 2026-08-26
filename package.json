@@ -6,7 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "node --conditions=react-server --import tsx --test testes/**/*.test.ts",
+    "test:migrations": "bash scripts/testar-migrations.sh",
+    "test:conexoes": "node scripts/testar-conexoes-reais.mjs",
+    "verificar": "npm run typecheck && npm run lint && npm test"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
@@ -31,6 +36,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.2",
     "tailwindcss": "^4",
+    "tsx": "^4.23.12",
     "typescript": "^5"
   }
 }
