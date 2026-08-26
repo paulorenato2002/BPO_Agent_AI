@@ -1,0 +1,432 @@
+-- =============================================================================
+-- Testes de asserção da camada operacional
+--
+-- Roda contra um Postgres descartável (ver scripts/testar-migrations.sh).
+-- Qualquer falha levanta exceção e aborta com código de saída != 0.
+--
+-- Cobre: preservação do schema existente, presença das novas entidades, RLS,
+-- privilégios de anon, imutabilidade do histórico, e as regras de negócio que
+-- foram implementadas como constraint (duplicidade, cronômetro único,
+-- confirmação real de armazenamento).
+-- =============================================================================
+
+\set ON_ERROR_STOP on
+
+create or replace function pg_temp.checar(descricao text, condicao boolean)
+returns void language plpgsql as $$
+begin
+  if condicao then
+    raise notice '  OK   %', descricao;
+  else
+    raise exception 'FALHOU: %', descricao;
+  end if;
+end;
+$$;
+
+do $$ begin raise notice E'\n--- 1. Preservação do schema existente ---'; end $$;
+
+-- As 26 tabelas originais continuam existindo, intactas.
+do $$
+declare
+  faltando text[];
+  originais text[] := array[
+    'empresas','enderecos_empresa','pessoas','empresa_pessoas','canais_comunicacao',
+    'grupos_comunicacao','grupo_participantes','servicos','planos_referencia',
+    'plano_servicos','contratos','contrato_servicos','modelos_precificacao',
+    'modelo_recursos_equipe','regras_precificacao_servicos','precificacoes',
+    'precificacao_itens','precificacao_componentes','modelos_onboarding',
+    'fases_onboarding','tarefas_modelo_onboarding','onboardings','tarefas_onboarding',
+    'evidencias_tarefa_onboarding','alertas_onboarding','historico_onboarding'
+  ];
+begin
+  select array_agg(t) into faltando
+  from unnest(originais) t
+  where not exists (
+    select 1 from pg_tables where schemaname = 'public' and tablename = t
+  );
+  perform pg_temp.checar(
+    'as 26 tabelas originais continuam existindo',
+    faltando is null
+  );
+end $$;
+
+do $$ begin raise notice E'\n--- 2. Novas entidades criadas ---'; end $$;
+
+do $$
+declare
+  faltando text[];
+  novas text[] := array[
+    'perfis_usuarios','competencias_operacionais','modelos_rotina',
+    'etapas_modelo_rotina','rotinas_empresa','tarefas_operacionais',
+    'apontamentos_tempo','documentos_operacionais','documento_localizacoes',
+    'execucoes_ferramenta','aprovacoes_operacionais','notificacoes_operacionais',
+    'eventos_operacionais','conversas_agente','mensagens_agente'
+  ];
+begin
+  select array_agg(t) into faltando
+  from unnest(novas) t
+  where not exists (
+    select 1 from pg_tables where schemaname = 'public' and tablename = t
+  );
+  perform pg_temp.checar('as 15 novas tabelas foram criadas', faltando is null);
+end $$;
+
+do $$
+declare
+  faltando text[];
+  views text[] := array[
+    'vw_tarefas_hoje','vw_tarefas_atrasadas','vw_tarefas_semana',
+    'vw_operacao_por_empresa','vw_cronometros_ativos','vw_horas_por_empresa',
+    'vw_execucoes_pendentes','vw_execucoes_erro','vw_documentos_por_empresa_competencia'
+  ];
+begin
+  select array_agg(v) into faltando
+  from unnest(views) v
+  where not exists (
+    select 1 from pg_views where schemaname = 'public' and viewname = v
+  );
+  perform pg_temp.checar('as 9 views do Hub foram criadas', faltando is null);
+end $$;
+
+do $$ begin raise notice E'\n--- 3. Segurança: RLS e privilégios ---'; end $$;
+
+do $$
+declare
+  sem_rls text[];
+begin
+  select array_agg(c.relname) into sem_rls
+  from pg_class c
+  where c.relnamespace = 'public'::regnamespace
+    and c.relkind = 'r'
+    and c.relname in (
+      'perfis_usuarios','competencias_operacionais','modelos_rotina',
+      'etapas_modelo_rotina','rotinas_empresa','tarefas_operacionais',
+      'apontamentos_tempo','documentos_operacionais','documento_localizacoes',
+      'execucoes_ferramenta','aprovacoes_operacionais','notificacoes_operacionais',
+      'eventos_operacionais','conversas_agente','mensagens_agente'
+    )
+    and not c.relrowsecurity;
+  perform pg_temp.checar('RLS habilitada em todas as novas tabelas', sem_rls is null);
+end $$;
+
+do $$
+declare
+  vazados text[];
+begin
+  select array_agg(distinct table_name::text) into vazados
+  from information_schema.role_table_grants
+  where grantee = 'anon'
+    and table_schema = 'public'
+    and table_name in (
+      'perfis_usuarios','competencias_operacionais','documentos_operacionais',
+      'documento_localizacoes','eventos_operacionais','conversas_agente',
+      'mensagens_agente','execucoes_ferramenta','tarefas_operacionais'
+    );
+  perform pg_temp.checar('anon NÃO tem privilégio nas novas tabelas', vazados is null);
+end $$;
+
+do $$
+declare
+  n int;
+begin
+  select count(*) into n
+  from information_schema.role_table_grants
+  where grantee = 'authenticated'
+    and table_schema = 'public'
+    and table_name = 'eventos_operacionais'
+    and privilege_type = 'UPDATE';
+  perform pg_temp.checar('authenticated NÃO pode dar UPDATE em eventos_operacionais', n = 0);
+end $$;
+
+-- Views SECURITY DEFINER ignorariam a RLS de quem consulta.
+do $$
+declare
+  inseguras text[];
+begin
+  select array_agg(c.relname) into inseguras
+  from pg_class c
+  where c.relnamespace = 'public'::regnamespace
+    and c.relkind = 'v'
+    and c.relname like 'vw_%'
+    and coalesce(
+      (select option_value from pg_options_to_table(c.reloptions)
+        where option_name = 'security_invoker'), 'false'
+    ) <> 'true';
+  perform pg_temp.checar('todas as views usam security_invoker', inseguras is null);
+end $$;
+
+do $$
+declare
+  n int;
+begin
+  select count(*) into n from pg_policies where schemaname = 'public'
+    and tablename in (
+      'perfis_usuarios','competencias_operacionais','modelos_rotina',
+      'etapas_modelo_rotina','rotinas_empresa','tarefas_operacionais',
+      'apontamentos_tempo','documentos_operacionais','documento_localizacoes',
+      'execucoes_ferramenta','aprovacoes_operacionais','notificacoes_operacionais',
+      'eventos_operacionais','conversas_agente','mensagens_agente'
+    );
+  perform pg_temp.checar('políticas de RLS foram criadas (>= 30)', n >= 30);
+end $$;
+
+do $$ begin raise notice E'\n--- 4. Regras de negócio no banco ---'; end $$;
+
+-- Massa de teste mínima.
+insert into auth.users (id, email) values
+  ('11111111-1111-1111-1111-111111111111', 'teste@effective.local')
+on conflict do nothing;
+
+insert into public.perfis_usuarios (usuario_id, nome, papel)
+values ('11111111-1111-1111-1111-111111111111', 'Usuário de Teste', 'analista')
+on conflict (usuario_id) do nothing;
+
+insert into public.empresas (id, codigo, razao_social, cnpj, matriz_filial, status_operacao, ativo)
+values ('22222222-2222-2222-2222-222222222222', 'TESTE01', 'Empresa Teste LTDA',
+        '00000000000191', 'matriz', 'implantacao', true)
+on conflict (id) do nothing;
+
+-- 4.1 Competência duplicada (mesma empresa/ano/mês) deve falhar.
+do $$
+declare erro boolean := false;
+begin
+  insert into public.competencias_operacionais (empresa_id, ano, mes)
+  values ('22222222-2222-2222-2222-222222222222', 2026, 8);
+  begin
+    insert into public.competencias_operacionais (empresa_id, ano, mes)
+    values ('22222222-2222-2222-2222-222222222222', 2026, 8);
+  exception when unique_violation then erro := true;
+  end;
+  perform pg_temp.checar('competência duplicada (empresa/ano/mês) é bloqueada', erro);
+end $$;
+
+-- 4.2 Coluna gerada `referencia`.
+do $$
+declare r date;
+begin
+  select referencia into r from public.competencias_operacionais
+   where empresa_id = '22222222-2222-2222-2222-222222222222' and ano = 2026 and mes = 8;
+  perform pg_temp.checar('coluna gerada referencia = 2026-08-01', r = date '2026-08-01');
+end $$;
+
+-- 4.3 Documento com hash duplicado na MESMA empresa deve falhar.
+do $$
+declare erro boolean := false;
+begin
+  insert into public.documentos_operacionais
+    (empresa_id, nome_original, hash_sha256)
+  values ('22222222-2222-2222-2222-222222222222', 'relatorio.xlsx', repeat('a', 64));
+  begin
+    insert into public.documentos_operacionais
+      (empresa_id, nome_original, hash_sha256)
+    values ('22222222-2222-2222-2222-222222222222', 'copia-do-relatorio.xlsx', repeat('a', 64));
+  exception when unique_violation then erro := true;
+  end;
+  perform pg_temp.checar('documento com mesmo hash na mesma empresa é bloqueado', erro);
+end $$;
+
+-- 4.4 Hash em formato inválido deve falhar.
+do $$
+declare erro boolean := false;
+begin
+  begin
+    insert into public.documentos_operacionais (empresa_id, nome_original, hash_sha256)
+    values ('22222222-2222-2222-2222-222222222222', 'x.txt', repeat('Z', 64));
+  exception when check_violation then erro := true;
+  end;
+  perform pg_temp.checar('hash fora do formato sha256 hex é rejeitado', erro);
+end $$;
+
+-- 4.5 Localização não pode ser 'armazenado' sem confirmação real (armazenado_em).
+do $$
+declare
+  erro boolean := false;
+  doc uuid;
+begin
+  select id into doc from public.documentos_operacionais
+   where empresa_id = '22222222-2222-2222-2222-222222222222' limit 1;
+  begin
+    insert into public.documento_localizacoes (documento_id, provedor, status)
+    values (doc, 'supabase_storage', 'armazenado');
+  exception when check_violation then erro := true;
+  end;
+  perform pg_temp.checar('status "armazenado" exige armazenado_em (sem fingir sucesso)', erro);
+end $$;
+
+-- 4.6 Um documento não pode ter duas localizações no mesmo provedor.
+do $$
+declare
+  erro boolean := false;
+  doc uuid;
+begin
+  select id into doc from public.documentos_operacionais
+   where empresa_id = '22222222-2222-2222-2222-222222222222' limit 1;
+  insert into public.documento_localizacoes (documento_id, provedor, status, armazenado_em)
+  values (doc, 'supabase_storage', 'armazenado', now());
+  begin
+    insert into public.documento_localizacoes (documento_id, provedor, status)
+    values (doc, 'supabase_storage', 'pendente');
+  exception when unique_violation then erro := true;
+  end;
+  perform pg_temp.checar('documento tem no máximo uma localização por provedor', erro);
+end $$;
+
+-- 4.7 Apenas um cronômetro ativo por usuário.
+do $$
+declare erro boolean := false;
+begin
+  insert into public.apontamentos_tempo (usuario_id, status)
+  values ('11111111-1111-1111-1111-111111111111', 'em_andamento');
+  begin
+    insert into public.apontamentos_tempo (usuario_id, status)
+    values ('11111111-1111-1111-1111-111111111111', 'em_andamento');
+  exception when unique_violation then erro := true;
+  end;
+  perform pg_temp.checar('segundo cronômetro ativo do mesmo usuário é bloqueado', erro);
+end $$;
+
+-- 4.8 Duração calculada automaticamente ao fechar a sessão.
+do $$
+declare d int;
+begin
+  update public.apontamentos_tempo
+     set fim = inicio + interval '90 minutes', status = 'concluido'
+   where usuario_id = '11111111-1111-1111-1111-111111111111'
+     and status = 'em_andamento';
+  select duracao_minutos into d from public.apontamentos_tempo
+   where usuario_id = '11111111-1111-1111-1111-111111111111' limit 1;
+  perform pg_temp.checar('duracao_minutos calculada = 90', d = 90);
+end $$;
+
+-- 4.9 Tarefa bloqueada exige motivo.
+do $$
+declare erro boolean := false;
+begin
+  begin
+    insert into public.tarefas_operacionais (empresa_id, titulo, bloqueada)
+    values ('22222222-2222-2222-2222-222222222222', 'Tarefa sem motivo', true);
+  exception when check_violation then erro := true;
+  end;
+  perform pg_temp.checar('tarefa bloqueada sem motivo é rejeitada', erro);
+end $$;
+
+-- 4.10 Idempotência de tarefa operacional.
+do $$
+declare erro boolean := false;
+begin
+  insert into public.tarefas_operacionais (empresa_id, titulo, chave_idempotencia)
+  values ('22222222-2222-2222-2222-222222222222', 'Fechamento 2026-08', 'fech-2026-08-teste');
+  begin
+    insert into public.tarefas_operacionais (empresa_id, titulo, chave_idempotencia)
+    values ('22222222-2222-2222-2222-222222222222', 'Fechamento 2026-08 (repetido)', 'fech-2026-08-teste');
+  exception when unique_violation then erro := true;
+  end;
+  perform pg_temp.checar('chave de idempotência impede tarefa duplicada', erro);
+end $$;
+
+-- 4.11 Etapa do tipo aplicação exige código de ferramenta.
+do $$
+declare
+  erro boolean := false;
+  modelo uuid;
+begin
+  insert into public.modelos_rotina (codigo, nome)
+  values ('TESTE_ROTINA', 'Rotina de Teste') returning id into modelo;
+  begin
+    insert into public.etapas_modelo_rotina (modelo_rotina_id, codigo, nome, ordem, tipo_etapa)
+    values (modelo, 'E1', 'Etapa aplicação sem ferramenta', 1, 'aplicacao');
+  exception when check_violation then erro := true;
+  end;
+  perform pg_temp.checar('etapa "aplicacao" exige ferramenta_codigo', erro);
+end $$;
+
+do $$ begin raise notice E'\n--- 5. Histórico append-only ---'; end $$;
+
+do $$
+declare
+  erro_update boolean := false;
+  erro_delete boolean := false;
+begin
+  insert into public.eventos_operacionais (tipo_evento, descricao)
+  values ('documento_recebido', 'Evento de teste');
+
+  begin
+    update public.eventos_operacionais set descricao = 'adulterado'
+     where tipo_evento = 'documento_recebido';
+  exception when others then erro_update := true;
+  end;
+  perform pg_temp.checar('UPDATE em eventos_operacionais é bloqueado', erro_update);
+
+  begin
+    delete from public.eventos_operacionais where tipo_evento = 'documento_recebido';
+  exception when others then erro_delete := true;
+  end;
+  perform pg_temp.checar('DELETE em eventos_operacionais é bloqueado', erro_delete);
+end $$;
+
+do $$ begin raise notice E'\n--- 6. Conversas do agente ---'; end $$;
+
+-- NOTA: now() é congelado dentro da transação, então comparar "antes vs depois"
+-- no mesmo bloco não prova nada. Forçamos um valor antigo e verificamos que o
+-- trigger o substituiu.
+do $$
+declare
+  conv uuid;
+  atividade_depois timestamptz;
+begin
+  insert into public.conversas_agente (usuario_id, titulo)
+  values ('11111111-1111-1111-1111-111111111111', 'Conversa de teste')
+  returning id into conv;
+
+  update public.conversas_agente
+     set ultima_atividade_em = timestamptz '2020-01-01 00:00:00+00'
+   where id = conv;
+
+  insert into public.mensagens_agente (conversa_id, papel, conteudo)
+  values (conv, 'usuario', 'Salva esse relatório da TL');
+
+  select ultima_atividade_em into atividade_depois
+    from public.conversas_agente where id = conv;
+
+  perform pg_temp.checar(
+    'nova mensagem atualiza ultima_atividade_em da conversa',
+    atividade_depois > timestamptz '2020-01-02 00:00:00+00'
+  );
+end $$;
+
+-- A sequência garante ordem estável mesmo com created_at empatado.
+do $$
+declare
+  conv uuid;
+  ordenadas text[];
+begin
+  insert into public.conversas_agente (usuario_id, titulo)
+  values ('11111111-1111-1111-1111-111111111111', 'Ordem das mensagens')
+  returning id into conv;
+
+  insert into public.mensagens_agente (conversa_id, papel, conteudo) values
+    (conv, 'usuario', 'primeira'),
+    (conv, 'agente',  'segunda'),
+    (conv, 'usuario', 'terceira');
+
+  select array_agg(conteudo order by sequencia) into ordenadas
+    from public.mensagens_agente where conversa_id = conv;
+
+  perform pg_temp.checar(
+    'sequencia mantém a ordem das mensagens',
+    ordenadas = array['primeira', 'segunda', 'terceira']
+  );
+end $$;
+
+do $$
+declare erro boolean := false;
+begin
+  begin
+    insert into public.conversas_agente (usuario_id, titulo, status)
+    values ('11111111-1111-1111-1111-111111111111', 'Sem data de arquivo', 'arquivada');
+  exception when check_violation then erro := true;
+  end;
+  perform pg_temp.checar('conversa arquivada exige arquivada_em', erro);
+end $$;
+
+do $$ begin raise notice E'\n=== TODOS OS TESTES PASSARAM ==='; end $$;
