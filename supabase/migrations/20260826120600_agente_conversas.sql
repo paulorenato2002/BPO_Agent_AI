@@ -20,6 +20,9 @@ create table if not exists public.conversas_agente (
   empresa_id            uuid references public.empresas(id) on delete set null,
   titulo                text not null default 'Nova conversa',
   status                varchar(20) not null default 'ativa',
+  -- Resumo do contexto da conversa, para reconstruir histórico longo sem
+  -- reenviar todas as mensagens ao modelo.
+  resumo_contexto       text,
   iniciada_em           timestamptz not null default now(),
   ultima_atividade_em   timestamptz not null default now(),
   arquivada_em          timestamptz,
@@ -61,6 +64,10 @@ create table if not exists public.mensagens_agente (
   papel             varchar(20) not null,
   conteudo          text,
   tipo_mensagem     varchar(20) not null default 'texto',
+  -- Ciclo de vida da mensagem. A mensagem do usuário é gravada como 'concluida'
+  -- ANTES de chamar o modelo; a resposta nasce 'processando' e vira 'concluida'
+  -- ou 'erro'. Assim uma falha do modelo nunca apaga o que o usuário escreveu.
+  status            varchar(20) not null default 'concluida',
   -- Payload estruturado: cartões de arquivo, resultado de armazenamento,
   -- chamadas de ferramenta. O que a UI precisa para renderizar cartões ricos.
   metadados         jsonb not null default '{}'::jsonb,
@@ -72,10 +79,17 @@ create table if not exists public.mensagens_agente (
     check (papel in ('usuario', 'agente', 'sistema', 'ferramenta')),
   constraint mensagens_agente_tipo_check
     check (tipo_mensagem in ('texto', 'arquivo', 'resultado', 'status', 'erro', 'aprovacao')),
-  -- Mensagem de texto sem conteúdo não faz sentido; os demais tipos podem
-  -- carregar apenas metadados (ex.: cartão de resultado).
+  constraint mensagens_agente_status_check
+    check (status in ('criada', 'processando', 'concluida', 'erro', 'cancelada')),
+  -- Mensagem de texto CONCLUÍDA sem conteúdo não faz sentido. Enquanto está
+  -- 'criada'/'processando' o conteúdo ainda não existe (o streaming não
+  -- terminou), e em 'erro'/'cancelada' pode nunca existir.
   constraint mensagens_agente_conteudo_check
-    check (tipo_mensagem <> 'texto' or conteudo is not null)
+    check (
+      tipo_mensagem <> 'texto'
+      or status <> 'concluida'
+      or conteudo is not null
+    )
 );
 
 comment on table public.mensagens_agente is
@@ -115,3 +129,63 @@ drop trigger if exists mensagens_agente_touch_conversa on public.mensagens_agent
 create trigger mensagens_agente_touch_conversa
   after insert on public.mensagens_agente
   for each row execute function public.op_touch_conversa();
+
+
+-- -----------------------------------------------------------------------------
+-- 4. Limite de conversas ativas por usuário
+--
+-- A regra vive no BANCO, não só na interface — senão duas requisições
+-- simultâneas passam pela checagem da aplicação ao mesmo tempo e criam o 11º.
+--
+-- Atomicidade: `pg_advisory_xact_lock` serializa as inserções DO MESMO usuário
+-- dentro da transação. Sem isso, duas transações concorrentes leriam "9" e
+-- ambas inseririam. O lock é por usuário, então não serializa o sistema todo.
+--
+-- Vale também para RESTAURAR uma conversa arquivada (arquivada -> ativa).
+-- Nada é apagado nem sobrescrito: ao atingir o limite, a operação falha e o
+-- usuário escolhe o que arquivar.
+-- -----------------------------------------------------------------------------
+
+create or replace function public.op_limite_conversas_ativas()
+returns trigger
+language plpgsql
+as $$
+declare
+  limite   constant int := 10;
+  ativas   int;
+begin
+  -- Só interessa quando a linha passa a contar como ativa.
+  if tg_op = 'UPDATE' and not (new.status = 'ativa' and old.status <> 'ativa') then
+    return new;
+  end if;
+  if tg_op = 'INSERT' and new.status <> 'ativa' then
+    return new;
+  end if;
+
+  -- Serializa por usuário até o fim da transação.
+  perform pg_advisory_xact_lock(hashtext('conversas_agente:' || new.usuario_id::text));
+
+  select count(*) into ativas
+  from public.conversas_agente c
+  where c.usuario_id = new.usuario_id
+    and c.status = 'ativa'
+    and c.id <> new.id;
+
+  if ativas >= limite then
+    raise exception
+      'Limite de % conversas ativas atingido. Arquive uma conversa para abrir outra.', limite
+      using errcode = 'check_violation',
+            hint = 'Arquive uma conversa existente (status = arquivada) e tente de novo.';
+  end if;
+
+  return new;
+end;
+$$;
+
+comment on function public.op_limite_conversas_ativas() is
+  'Impede mais de 10 conversas ativas por usuário, de forma atômica (advisory lock por usuário).';
+
+drop trigger if exists conversas_agente_limite_ativas on public.conversas_agente;
+create trigger conversas_agente_limite_ativas
+  before insert or update of status on public.conversas_agente
+  for each row execute function public.op_limite_conversas_ativas();

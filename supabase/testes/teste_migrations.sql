@@ -429,4 +429,207 @@ begin
   perform pg_temp.checar('conversa arquivada exige arquivada_em', erro);
 end $$;
 
+do $$ begin raise notice E'\n--- 7. Limite de 10 conversas ativas ---'; end $$;
+
+do $$
+declare
+  erro boolean := false;
+  ativas int;
+  primeira uuid;
+begin
+  -- Limpa o terreno para a contagem ser previsível.
+  delete from public.conversas_agente
+   where usuario_id = '11111111-1111-1111-1111-111111111111';
+
+  for i in 1..10 loop
+    insert into public.conversas_agente (usuario_id, titulo)
+    values ('11111111-1111-1111-1111-111111111111', 'Conversa ' || i)
+    returning id into primeira;
+  end loop;
+
+  select count(*) into ativas from public.conversas_agente
+   where usuario_id = '11111111-1111-1111-1111-111111111111' and status = 'ativa';
+  perform pg_temp.checar('10 conversas ativas foram criadas', ativas = 10);
+
+  begin
+    insert into public.conversas_agente (usuario_id, titulo)
+    values ('11111111-1111-1111-1111-111111111111', 'Décima primeira');
+  exception when check_violation then erro := true;
+  end;
+  perform pg_temp.checar('a 11ª conversa é bloqueada pelo banco', erro);
+
+  -- Nada foi apagado nem sobrescrito.
+  select count(*) into ativas from public.conversas_agente
+   where usuario_id = '11111111-1111-1111-1111-111111111111' and status = 'ativa';
+  perform pg_temp.checar('nenhuma conversa foi removida silenciosamente', ativas = 10);
+end $$;
+
+-- Arquivar libera espaço; restaurar valida o limite de novo.
+do $$
+declare
+  alvo uuid;
+  ativas int;
+  erro boolean := false;
+begin
+  select id into alvo from public.conversas_agente
+   where usuario_id = '11111111-1111-1111-1111-111111111111' and status = 'ativa' limit 1;
+
+  update public.conversas_agente
+     set status = 'arquivada', arquivada_em = now()
+   where id = alvo;
+
+  select count(*) into ativas from public.conversas_agente
+   where usuario_id = '11111111-1111-1111-1111-111111111111' and status = 'ativa';
+  perform pg_temp.checar('arquivar reduz a contagem de ativas para 9', ativas = 9);
+
+  -- Agora cabe mais uma.
+  insert into public.conversas_agente (usuario_id, titulo)
+  values ('11111111-1111-1111-1111-111111111111', 'Nova depois do arquivamento');
+  perform pg_temp.checar('com espaço livre, nova conversa é criada', true);
+
+  -- E restaurar a arquivada deve falhar (voltaria a 11).
+  begin
+    update public.conversas_agente set status = 'ativa', arquivada_em = null where id = alvo;
+  exception when check_violation then erro := true;
+  end;
+  perform pg_temp.checar('restaurar acima do limite é bloqueado', erro);
+
+  -- A arquivada continua existindo.
+  perform pg_temp.checar(
+    'conversa arquivada foi preservada',
+    exists (select 1 from public.conversas_agente where id = alvo)
+  );
+end $$;
+
+do $$ begin raise notice E'\n--- 8. Memória do agente ---'; end $$;
+
+do $$
+declare n int;
+begin
+  select count(*) into n from pg_tables where schemaname = 'public'
+    and tablename in ('memorias_agente','memoria_utilizacoes','feedback_agente','mensagem_documentos');
+  perform pg_temp.checar('as 4 tabelas de memória foram criadas', n = 4);
+end $$;
+
+-- Segredo não vira memória.
+do $$
+declare erro boolean := false;
+begin
+  begin
+    insert into public.memorias_agente (tipo_memoria, escopo, usuario_id, titulo, conteudo, criada_por)
+    values ('preferencia', 'pessoal', '11111111-1111-1111-1111-111111111111',
+            'Acesso ao portal', 'senha: hunter2', '11111111-1111-1111-1111-111111111111');
+  exception when check_violation then erro := true;
+  end;
+  perform pg_temp.checar('memória com "senha:" é bloqueada', erro);
+end $$;
+
+do $$
+declare erro boolean := false;
+begin
+  begin
+    insert into public.memorias_agente (tipo_memoria, escopo, usuario_id, titulo, conteudo, criada_por)
+    values ('contexto', 'pessoal', '11111111-1111-1111-1111-111111111111',
+            'Integração', 'usar api_key = sk-abcdefghijklmnop123456',
+            '11111111-1111-1111-1111-111111111111');
+  exception when check_violation then erro := true;
+  end;
+  perform pg_temp.checar('memória com chave de API é bloqueada', erro);
+end $$;
+
+-- Coerência entre escopo e alvo.
+do $$
+declare erro boolean := false;
+begin
+  begin
+    insert into public.memorias_agente (tipo_memoria, escopo, titulo, conteudo, criada_por)
+    values ('regra', 'pessoal', 'Sem dono', 'conteúdo qualquer',
+            '11111111-1111-1111-1111-111111111111');
+  exception when check_violation then erro := true;
+  end;
+  perform pg_temp.checar('memória pessoal sem usuario_id é rejeitada', erro);
+end $$;
+
+-- Memória não nasce ativa sem aprovador.
+do $$
+declare erro boolean := false;
+begin
+  begin
+    insert into public.memorias_agente (tipo_memoria, escopo, empresa_id, titulo, conteudo, status, criada_por)
+    values ('regra', 'empresa', '22222222-2222-2222-2222-222222222222',
+            'Regra sem aprovação', 'conteúdo', 'ativa',
+            '11111111-1111-1111-1111-111111111111');
+  exception when check_violation then erro := true;
+  end;
+  perform pg_temp.checar('memória ativa sem aprovador é rejeitada', erro);
+end $$;
+
+-- Só papel autorizado ativa memória de empresa.
+do $$
+declare
+  mem uuid;
+  erro boolean := false;
+begin
+  insert into public.memorias_agente (tipo_memoria, escopo, empresa_id, titulo, conteudo, criada_por)
+  values ('regra', 'empresa', '22222222-2222-2222-2222-222222222222',
+          'Fechamento até o dia 5', 'A DRE fecha até o quinto dia útil.',
+          '11111111-1111-1111-1111-111111111111')
+  returning id into mem;
+
+  -- O usuário de teste é 'analista' — não pode aprovar memória de empresa.
+  begin
+    update public.memorias_agente
+       set status = 'ativa',
+           aprovada_por = '11111111-1111-1111-1111-111111111111',
+           aprovada_em = now()
+     where id = mem;
+  exception when check_violation then erro := true;
+  end;
+  perform pg_temp.checar('analista NÃO ativa memória de empresa', erro);
+
+  -- Promovido a supervisor, consegue.
+  update public.perfis_usuarios set papel = 'supervisor'
+   where usuario_id = '11111111-1111-1111-1111-111111111111';
+
+  update public.memorias_agente
+     set status = 'ativa',
+         aprovada_por = '11111111-1111-1111-1111-111111111111',
+         aprovada_em = now()
+   where id = mem;
+
+  perform pg_temp.checar(
+    'supervisor ativa memória de empresa',
+    (select status from public.memorias_agente where id = mem) = 'ativa'
+  );
+end $$;
+
+-- Revogação preserva o registro.
+do $$
+declare mem uuid;
+begin
+  select id into mem from public.memorias_agente where escopo = 'empresa' limit 1;
+  update public.memorias_agente
+     set status = 'revogada', revogada_por = '11111111-1111-1111-1111-111111111111',
+         revogada_em = now(), motivo_revogacao = 'regra mudou'
+   where id = mem;
+  perform pg_temp.checar(
+    'memória revogada continua existindo, só muda de status',
+    exists (select 1 from public.memorias_agente where id = mem and status = 'revogada')
+  );
+end $$;
+
+-- Feedback não vira memória sozinho.
+do $$
+declare fb uuid;
+begin
+  insert into public.feedback_agente (usuario_id, tipo_feedback, comentario)
+  values ('11111111-1111-1111-1111-111111111111', 'correcao', 'A data estava errada.')
+  returning id into fb;
+
+  perform pg_temp.checar(
+    'feedback nasce sem memória associada',
+    (select gerou_memoria_id from public.feedback_agente where id = fb) is null
+  );
+end $$;
+
 do $$ begin raise notice E'\n=== TODOS OS TESTES PASSARAM ==='; end $$;
