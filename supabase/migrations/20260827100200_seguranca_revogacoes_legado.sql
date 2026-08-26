@@ -1,23 +1,20 @@
 -- =============================================================================
--- ⚠️  NÃO É APLICADO AUTOMATICAMENTE — EXIGE REVISÃO E APROVAÇÃO EXPLÍCITA
+-- Revogação do acesso anônimo às tabelas legadas
 --
--- Esta migration está FORA de `supabase/migrations/` de propósito: ela altera
--- privilégios das 26 tabelas JÁ EXISTENTES. Se alguma outra aplicação, script,
--- automação ou integração hoje acessa o banco com a chave `anon`, ela PARA de
--- funcionar no instante em que este script rodar.
+-- APROVADO em 2026-08-26: confirmado que nenhuma aplicação, script ou automação
+-- consome o banco com a chave `anon`. Por isso esta migration saiu de
+-- `revisar-antes-de-aplicar/` e entrou no fluxo normal.
 --
--- ANTES DE APLICAR, responda:
---   1. Existe alguma aplicação usando a chave anon contra estas tabelas?
---   2. Existe algum front-end público lendo dados diretamente?
---   3. Existe automação (n8n, script, integração) usando anon?
+-- POR QUE É NECESSÁRIA: verificado empiricamente que as 26 tabelas de cadastro
+-- respondem a SELECT com a chave `anon` — CNPJ, contratos, valores e dados de
+-- pessoas. Hoje isso não é explorável porque nada no navegador usa essa chave.
+-- Deixa de ser verdade assim que o login existir: o Supabase Auth roda no
+-- cliente com a chave pública, que passa a ser embutida no bundle. A partir daí
+-- qualquer visitante extrai a chave e lê tudo.
 --
--- Se a resposta for "não" para as três, este script é seguro.
--- Se for "sim" para alguma, migre aquele consumo para o backend antes.
+-- Portanto esta migration precisa entrar JUNTO com a autenticação, não depois.
 --
--- COMO APLICAR (depois de aprovado):
---   mova o arquivo para `supabase/migrations/` e rode a migration,
---   ou execute o conteúdo no SQL Editor do Supabase.
---
+-- ORDEM: aplicar por ÚLTIMA, quando todas as tabelas já existem.
 -- REVERSÃO: ver bloco comentado no final do arquivo.
 -- =============================================================================
 
@@ -84,8 +81,15 @@ begin
 end;
 $$;
 
--- 2c. `anon` não precisa nem enxergar o schema.
-revoke usage on schema public from anon;
+-- 2c. NÃO revogamos USAGE no schema `public`.
+--
+--     Seria inócuo: o USAGE vem do pseudo-papel PUBLIC, que todo papel herda.
+--     `revoke usage on schema public from anon` não tira nada — e revogar de
+--     PUBLIC atingiria `authenticated` e outros papéis do Supabase.
+--
+--     E é desnecessário: USAGE no schema só permite REFERENCIAR objetos, não
+--     lê dado nenhum. Sem privilégio de tabela (revogado em 2a), `anon` não
+--     consegue seleção alguma — que é o que está sendo testado.
 
 -- 2d. Impede que NOVAS tabelas voltem a ser concedidas a anon automaticamente.
 --     (O Supabase configura default privileges amplos por padrão.)

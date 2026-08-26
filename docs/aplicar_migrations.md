@@ -69,6 +69,14 @@ no SQL Editor. **A ordem importa** (há dependências entre eles):
 | 7 | `20260826120600_agente_conversas.sql` | `conversas_agente`, `mensagens_agente` |
 | 8 | `20260826120700_operacional_views.sql` | as 9 views do Hub |
 | 9 | `20260826120800_operacional_rls.sql` | RLS e privilégios das novas tabelas |
+| 10 | `20260827100000_agente_memoria.sql` | memórias, utilizações, feedback, anexos |
+| 11 | `20260827100100_agente_memoria_rls.sql` | RLS da memória e aprovação por papel |
+| 12 | `20260827100200_seguranca_revogacoes_legado.sql` | **fecha a leitura anônima das 26 tabelas** |
+
+> **O arquivo 12 é o mais importante para a segurança.** Hoje a chave `anon`
+> lê as 26 tabelas de cadastro. Isso só não é explorável porque nada no
+> navegador usa essa chave — o que deixa de ser verdade assim que o login
+> existir. Aplique-o junto com os demais, não depois.
 
 Execute um por vez e confirme "Success" antes do próximo.
 
@@ -170,16 +178,24 @@ join auth.users u on u.id = p.usuario_id;
 
 ---
 
-## Passo 5 (opcional, exige decisão) — Revisão de privilégios do legado
+## Verificação extra de segurança
 
-`supabase/revisar-antes-de-aplicar/20260826121000_seguranca_revogacoes_legado.sql`
-revoga o acesso de `anon` às **26 tabelas existentes**.
+Depois de aplicar o arquivo 12, confirme que a leitura anônima fechou:
 
-Está fora do fluxo automático de propósito: **se alguma aplicação, script ou
-automação usa a chave `anon` hoje, ela para de funcionar na hora.**
+```sql
+-- Esperado: 0 linhas.
+select table_name, privilege_type
+from information_schema.role_table_grants
+where grantee = 'anon' and table_schema = 'public';
+```
 
-O arquivo traz o diagnóstico para rodar antes, e o bloco de reversão. Não
-aplique sem responder: existe algum consumidor usando `anon` hoje?
+E o teste de comportamento, que é o que importa:
+
+```sql
+set role anon;
+select count(*) from public.empresas;   -- deve falhar: permission denied
+reset role;
+```
 
 ---
 

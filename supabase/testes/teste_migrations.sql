@@ -632,4 +632,75 @@ begin
   );
 end $$;
 
+do $$ begin raise notice E'\n--- 9. Revogação do acesso anônimo (legado) ---'; end $$;
+
+-- Depois da última migration, `anon` não pode ter privilégio em NENHUMA tabela
+-- do schema public — nem nas 26 antigas, nem nas novas.
+do $$
+declare
+  vazando text[];
+begin
+  select array_agg(distinct table_name::text) into vazando
+  from information_schema.role_table_grants
+  where grantee = 'anon' and table_schema = 'public';
+
+  perform pg_temp.checar(
+    'anon não tem privilégio em NENHUMA tabela do public',
+    vazando is null
+  );
+end $$;
+
+-- Teste COMPORTAMENTAL: assume o papel anon e tenta ler de verdade.
+-- Vale mais que inspecionar tabela de privilégios — é o que um invasor faria.
+do $$
+declare
+  bloqueou boolean := false;
+begin
+  set local role anon;
+  begin
+    perform 1 from public.empresas limit 1;
+  exception when insufficient_privilege then bloqueou := true;
+  end;
+  reset role;
+  perform pg_temp.checar('anon NÃO consegue ler public.empresas', bloqueou);
+end $$;
+
+do $$
+declare
+  bloqueou boolean := false;
+begin
+  set local role anon;
+  begin
+    perform 1 from public.contratos limit 1;
+  exception when insufficient_privilege then bloqueou := true;
+  end;
+  reset role;
+  perform pg_temp.checar('anon NÃO consegue ler public.contratos', bloqueou);
+end $$;
+
+do $$
+declare
+  bloqueou boolean := false;
+begin
+  set local role anon;
+  begin
+    perform 1 from public.conversas_agente limit 1;
+  exception when insufficient_privilege then bloqueou := true;
+  end;
+  reset role;
+  perform pg_temp.checar('anon NÃO consegue ler conversas do agente', bloqueou);
+end $$;
+
+-- E o padrão para tabelas futuras também precisa estar fechado.
+do $$
+declare
+  n int;
+begin
+  select count(*) into n
+  from pg_default_acl d
+  where d.defaclnamespace = 'public'::regnamespace
+    and array_to_string(d.defaclacl, ',') like '%anon=%';
+  perform pg_temp.checar('default privileges não concedem nada a anon', n = 0);
+end $$;
+
 do $$ begin raise notice E'\n=== TODOS OS TESTES PASSARAM ==='; end $$;
