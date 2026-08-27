@@ -11,16 +11,14 @@ import {
   IconeRecolher,
   IconeChevron,
 } from "./icones";
-import {
-  agruparPorPeriodo,
-  type EstadoHistorico,
-  type UsuarioSessao,
-} from "./tipos";
+import { agruparPorPeriodo, type UsuarioSessao } from "./tipos";
+import type { EstadoHistorico } from "../hooks/useConversas";
+import { sair } from "../login/acoes";
 
 type Props = {
-  historico: EstadoHistorico;
-  carregando: boolean;
+  estado: EstadoHistorico;
   conversaAtivaId: string | null;
+  erroAcao: string | null;
   sessao: UsuarioSessao | null;
   aberta: boolean;
   onFechar: () => void;
@@ -32,9 +30,9 @@ type Props = {
 };
 
 export function BarraLateral({
-  historico,
-  carregando,
+  estado,
   conversaAtivaId,
+  erroAcao,
   sessao,
   aberta,
   onFechar,
@@ -62,7 +60,12 @@ export function BarraLateral({
     };
   }, [menuAberto]);
 
-  const conversas = historico.disponivel ? historico.dados : [];
+  const carregando = estado.carregando;
+  const disponivel = estado.carregando === false && estado.ok;
+  const conversas = disponivel ? estado.conversas : [];
+  const ativas = disponivel ? estado.ativas : 0;
+  const limite = disponivel ? estado.limite : 10;
+  const noLimite = disponivel && ativas >= limite;
   const filtradas = busca.trim()
     ? conversas.filter((c) => c.titulo.toLowerCase().includes(busca.trim().toLowerCase()))
     : conversas;
@@ -114,11 +117,30 @@ export function BarraLateral({
         <div className="px-3">
           <button
             onClick={onNovoChat}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-azul px-4 py-3 text-[15px] font-medium text-white transition-colors hover:bg-azul-hover"
+            disabled={noLimite}
+            title={noLimite ? "Limite de conversas atingido — arquive uma para abrir outra" : undefined}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-azul px-4 py-3 text-[15px] font-medium text-white transition-colors hover:bg-azul-hover disabled:cursor-not-allowed disabled:opacity-45"
           >
             <IconeMais />
             Novo chat
           </button>
+
+          {disponivel && (
+            <p className="mt-2 text-center text-xs text-lateral-texto-suave">
+              {ativas} de {limite} conversas ativas
+            </p>
+          )}
+
+          {/* Limite atingido não apaga nem sobrescreve nada: o usuário decide
+              o que arquivar. */}
+          {erroAcao && (
+            <div
+              role="alert"
+              className="mt-2 rounded-xl border border-ambar/40 bg-ambar/10 px-3 py-2 text-xs leading-relaxed text-ambar"
+            >
+              {erroAcao}
+            </div>
+          )}
         </div>
 
         {/* Busca */}
@@ -141,11 +163,11 @@ export function BarraLateral({
         <nav className="rolagem-escura mt-4 flex-1 overflow-y-auto px-3 pb-4">
           {carregando && <EsqueletoHistorico />}
 
-          {!carregando && !historico.disponivel && (
-            <AvisoHistorico motivo={historico.motivo} detalhe={historico.detalhe} />
+          {!carregando && !disponivel && estado.carregando === false && (
+            <AvisoHistorico motivo={estado.motivo} detalhe={estado.detalhe} />
           )}
 
-          {!carregando && historico.disponivel && filtradas.length === 0 && (
+          {!carregando && disponivel && filtradas.length === 0 && (
             <p className="px-2 py-6 text-center text-sm text-lateral-texto-suave">
               {busca.trim()
                 ? "Nenhuma conversa encontrada."
@@ -379,9 +401,19 @@ function RodapeUsuario({ sessao }: { sessao: UsuarioSessao | null }) {
           role="menu"
           className="absolute bottom-full left-3 right-3 mb-1 overflow-hidden rounded-xl border border-lateral-borda bg-lateral-fundo-ativo py-1 shadow-lg"
         >
-          <div className="px-3 py-2 text-xs text-lateral-texto-suave">
+          <div className="border-b border-lateral-borda px-3 py-2 text-xs text-lateral-texto-suave">
             Papel: {usuario.papel ?? "sem perfil interno"}
           </div>
+          {/* Server Action: encerra a sessão no servidor e limpa o cookie. */}
+          <form action={sair}>
+            <button
+              type="submit"
+              role="menuitem"
+              className="w-full px-3 py-2 text-left text-sm text-lateral-texto hover:bg-lateral-fundo-hover"
+            >
+              Sair da conta
+            </button>
+          </form>
         </div>
       )}
     </div>

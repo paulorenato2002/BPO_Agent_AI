@@ -1,82 +1,134 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { EstadoHistorico, UsuarioSessao } from "../componentes/tipos";
+import type { Conversa, UsuarioSessao } from "../componentes/tipos";
+
+export type EstadoHistorico =
+  | { carregando: true }
+  | { carregando: false; ok: true; conversas: Conversa[]; ativas: number; limite: number }
+  | { carregando: false; ok: false; motivo: "sem_sessao" | "erro"; detalhe: string };
 
 /**
- * Histórico de conversas e sessão do usuário.
+ * Histórico de conversas do usuário autenticado.
  *
- * Quando a persistência não está disponível (banco não migrado ou sem sessão),
- * o hook devolve o motivo real — a interface avisa em vez de fingir uma lista
- * vazia. O chat continua funcionando em memória.
+ * Toda conversa aqui existe no banco: o "Novo chat" só entra na lista depois de
+ * o servidor confirmar a criação e devolver o id real. Nada de id temporário.
  */
 export function useConversas() {
-  const [historico, setHistorico] = useState<EstadoHistorico>({
-    disponivel: true,
-    dados: [],
-  });
+  const [estado, setEstado] = useState<EstadoHistorico>({ carregando: true });
   const [sessao, setSessao] = useState<UsuarioSessao | null>(null);
-  const [carregando, setCarregando] = useState(true);
   const [conversaAtivaId, setConversaAtivaId] = useState<string | null>(null);
+  const [erroAcao, setErroAcao] = useState<string | null>(null);
 
-  const carregarHistorico = useCallback(async () => {
+  const carregar = useCallback(async () => {
     try {
       const resposta = await fetch("/api/conversas", { cache: "no-store" });
-      setHistorico((await resposta.json()) as EstadoHistorico);
-    } catch (e) {
-      setHistorico({
-        disponivel: false,
-        motivo: "erro",
-        detalhe: e instanceof Error ? e.message : "Falha de rede.",
+      if (resposta.status === 401) {
+        setEstado({
+          carregando: false,
+          ok: false,
+          motivo: "sem_sessao",
+          detalhe: "Sessão expirada. Entre novamente.",
+        });
+        return;
+      }
+      const dados = await resposta.json();
+      if (!dados.ok) {
+        setEstado({
+          carregando: false,
+          ok: false,
+          motivo: "erro",
+          detalhe: dados.mensagem ?? "Não foi possível carregar o histórico.",
+        });
+        return;
+      }
+      setEstado({
+        carregando: false,
+        ok: true,
+        conversas: dados.dados,
+        ativas: dados.ativas,
+        limite: dados.limite,
       });
-    } finally {
-      setCarregando(false);
+    } catch {
+      setEstado({
+        carregando: false,
+        ok: false,
+        motivo: "erro",
+        detalhe: "Falha de rede ao carregar o histórico.",
+      });
     }
   }, []);
 
-  // Carga inicial. A guarda de desmontagem evita atualizar estado depois que o
-  // componente saiu — e mantém o efeito sem setState síncrono.
   useEffect(() => {
     let ativo = true;
-
-    async function carregarTudo() {
-      const [respostaHistorico, respostaSessao] = await Promise.allSettled([
-        fetch("/api/conversas", { cache: "no-store" }).then((r) => r.json()),
+    (async () => {
+      const [hist, ses] = await Promise.allSettled([
+        fetch("/api/conversas", { cache: "no-store" }).then((r) =>
+          r.status === 401 ? { ok: false, codigo: "sem_sessao" } : r.json()
+        ),
         fetch("/api/usuario", { cache: "no-store" }).then((r) => r.json()),
       ]);
       if (!ativo) return;
 
-      if (respostaHistorico.status === "fulfilled") {
-        setHistorico(respostaHistorico.value as EstadoHistorico);
+      if (hist.status === "fulfilled" && hist.value?.ok) {
+        setEstado({
+          carregando: false,
+          ok: true,
+          conversas: hist.value.dados,
+          ativas: hist.value.ativas,
+          limite: hist.value.limite,
+        });
       } else {
-        setHistorico({
-          disponivel: false,
+        setEstado({
+          carregando: false,
+          ok: false,
           motivo: "erro",
-          detalhe: "Falha de rede ao carregar o histórico.",
+          detalhe: "Não foi possível carregar o histórico.",
         });
       }
 
-      if (respostaSessao.status === "fulfilled") {
-        setSessao(respostaSessao.value as UsuarioSessao);
-      } else {
-        setSessao({ autenticado: false, detalhe: "Não foi possível verificar a sessão." });
-      }
-
-      setCarregando(false);
-    }
-
-    carregarTudo();
+      if (ses.status === "fulfilled") setSessao(ses.value as UsuarioSessao);
+      else setSessao({ autenticado: false, detalhe: "Sessão não verificada." });
+    })();
     return () => {
       ativo = false;
     };
   }, []);
 
+  /** Cria (ou reutiliza um chat vazio) e devolve o id REAL. */
+  const criarConversa = useCallback(async (): Promise<string | null> => {
+    setErroAcao(null);
+    try {
+      const resposta = await fetch("/api/conversas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const dados = await resposta.json();
+
+      if (!dados.ok) {
+        // 409 = limite de 10 atingido. Não criamos nada nem apagamos nada.
+        setErroAcao(dados.mensagem ?? "Não foi possível criar a conversa.");
+        return null;
+      }
+
+      await carregar();
+      setConversaAtivaId(dados.dados.id);
+      return dados.dados.id as string;
+    } catch {
+      setErroAcao("Falha de rede ao criar a conversa.");
+      return null;
+    }
+  }, [carregar]);
+
   const renomear = useCallback(
     async (id: string, titulo: string) => {
-      // Otimista: o título muda na hora; se falhar, o reload corrige.
-      setHistorico((atual) =>
-        atual.disponivel
-          ? { ...atual, dados: atual.dados.map((c) => (c.id === id ? { ...c, titulo } : c)) }
+      setEstado((atual) =>
+        atual.carregando === false && atual.ok
+          ? {
+              ...atual,
+              conversas: atual.conversas.map((c) => (c.id === id ? { ...c, titulo } : c)),
+            }
           : atual
       );
       await fetch(`/api/conversas/${id}`, {
@@ -84,33 +136,44 @@ export function useConversas() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ titulo }),
       }).catch(() => {});
-      carregarHistorico();
+      await carregar();
     },
-    [carregarHistorico]
+    [carregar]
   );
 
   const arquivar = useCallback(
     async (id: string) => {
-      setHistorico((atual) =>
-        atual.disponivel
-          ? { ...atual, dados: atual.dados.filter((c) => c.id !== id) }
-          : atual
-      );
-      if (conversaAtivaId === id) setConversaAtivaId(null);
       await fetch(`/api/conversas/${id}`, { method: "DELETE" }).catch(() => {});
-      carregarHistorico();
+      setConversaAtivaId((atual) => (atual === id ? null : atual));
+      setErroAcao(null);
+      await carregar();
     },
-    [carregarHistorico, conversaAtivaId]
+    [carregar]
   );
 
+  /** Atualiza o título localmente quando o servidor o gera na 1ª mensagem. */
+  const aplicarTitulo = useCallback((id: string, titulo: string) => {
+    setEstado((atual) =>
+      atual.carregando === false && atual.ok
+        ? {
+            ...atual,
+            conversas: atual.conversas.map((c) => (c.id === id ? { ...c, titulo } : c)),
+          }
+        : atual
+    );
+  }, []);
+
   return {
-    historico,
+    estado,
     sessao,
-    carregando,
     conversaAtivaId,
     setConversaAtivaId,
-    carregarHistorico,
+    erroAcao,
+    limparErroAcao: () => setErroAcao(null),
+    carregar,
+    criarConversa,
     renomear,
     arquivar,
+    aplicarTitulo,
   };
 }

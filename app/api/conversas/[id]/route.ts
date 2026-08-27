@@ -1,35 +1,51 @@
-import { renomearConversa, arquivarConversa } from "@/lib/repositorios/conversas";
 import { usuarioAtual } from "@/lib/auth/usuario";
+import {
+  renomearConversa,
+  arquivarConversa,
+  restaurarConversa,
+} from "@/lib/repositorios/conversas";
 
 export const dynamic = "force-dynamic";
 
-/** Renomear a conversa. */
+const SEM_SESSAO = Response.json(
+  { ok: false, codigo: "sem_sessao", mensagem: "Sessão expirada." },
+  { status: 401 }
+);
+
+/** Renomear, ou restaurar uma conversa arquivada. */
 export async function PATCH(request: Request, ctx: RouteContext<"/api/conversas/[id]">) {
-  const { id } = await ctx.params;
   const usuario = await usuarioAtual();
+  if (!usuario) return SEM_SESSAO;
+
+  const { id } = await ctx.params;
   const corpo = await request.json().catch(() => ({}));
+
+  if (corpo?.acao === "restaurar") {
+    const r = await restaurarConversa(usuario.id, id);
+    // Restaurar revalida o limite de 10 — pode não caber.
+    return Response.json(r, {
+      status: r.ok ? 200 : r.codigo === "limite_atingido" ? 409 : 400,
+    });
+  }
 
   const titulo = typeof corpo?.titulo === "string" ? corpo.titulo.trim() : "";
   if (!titulo) {
     return Response.json(
-      { disponivel: false, motivo: "erro", detalhe: "Título não pode ser vazio." },
+      { ok: false, codigo: "erro", mensagem: "Título não pode ser vazio." },
       { status: 400 }
     );
   }
 
-  const resultado = await renomearConversa(usuario?.id ?? null, id, titulo.slice(0, 120));
-  return Response.json(resultado);
+  const r = await renomearConversa(usuario.id, id, titulo.slice(0, 120));
+  return Response.json(r, { status: r.ok ? 200 : 404 });
 }
 
-/**
- * Arquivar a conversa.
- *
- * Deliberadamente NÃO é exclusão física: o histórico operacional é preservado.
- */
+/** Arquiva (não apaga) — o histórico operacional é preservado. */
 export async function DELETE(_request: Request, ctx: RouteContext<"/api/conversas/[id]">) {
-  const { id } = await ctx.params;
   const usuario = await usuarioAtual();
+  if (!usuario) return SEM_SESSAO;
 
-  const resultado = await arquivarConversa(usuario?.id ?? null, id);
-  return Response.json(resultado);
+  const { id } = await ctx.params;
+  const r = await arquivarConversa(usuario.id, id);
+  return Response.json(r, { status: r.ok ? 200 : 404 });
 }

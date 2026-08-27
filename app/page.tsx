@@ -20,15 +20,7 @@ export default function Pagina() {
   const [erroArquivo, setErroArquivo] = useState<string | null>(null);
 
   const { itens: saude, carregando: carregandoSaude } = useSaude();
-  const {
-    historico,
-    sessao,
-    carregando: carregandoHistorico,
-    conversaAtivaId,
-    setConversaAtivaId,
-    renomear,
-    arquivar,
-  } = useConversas();
+  const conversas = useConversas();
   const chat = useChat();
 
   async function anexarArquivos(arquivos: File[]) {
@@ -68,50 +60,69 @@ export default function Pagina() {
     }
   }
 
+  /**
+   * Toda mensagem precisa de uma conversa REAL para ser persistida. Se ainda
+   * não há uma ativa, cria antes de enviar — e aborta se o limite estiver cheio,
+   * em vez de mandar a mensagem para o vazio.
+   */
   async function enviar() {
+    let id = conversas.conversaAtivaId;
+    if (!id) {
+      id = await conversas.criarConversa();
+      if (!id) return; // limite atingido: o erro já está na barra lateral
+    }
+    chat.definirConversa(id, (titulo) => conversas.aplicarTitulo(id!, titulo));
+
     const texto = entrada;
     const paraEnviar = anexos;
     setEntrada("");
     setAnexos([]);
     setErroArquivo(null);
+
     await chat.enviar(texto, paraEnviar);
+    await conversas.carregar();
   }
 
-  function novoChat() {
-    chat.limpar();
+  async function novoChat() {
     setEntrada("");
     setAnexos([]);
     setErroArquivo(null);
-    setConversaAtivaId(null);
     setBarraAberta(false);
+
+    const id = await conversas.criarConversa();
+    if (!id) return; // limite atingido
+    chat.limpar();
+    chat.definirConversa(id, (titulo) => conversas.aplicarTitulo(id, titulo));
   }
 
-  function selecionarConversa(id: string) {
-    setConversaAtivaId(id);
+  async function selecionarConversa(id: string) {
+    conversas.setConversaAtivaId(id);
     setBarraAberta(false);
-    // O carregamento das mensagens depende das tabelas migradas; enquanto isso
-    // a seleção apenas destaca a conversa.
+    chat.definirConversa(id, (titulo) => conversas.aplicarTitulo(id, titulo));
+    await chat.carregarConversa(id);
   }
 
   const tituloAtual =
-    (historico.disponivel && historico.dados.find((c) => c.id === conversaAtivaId)?.titulo) ||
+    (conversas.estado.carregando === false &&
+      conversas.estado.ok &&
+      conversas.estado.conversas.find((c) => c.id === conversas.conversaAtivaId)?.titulo) ||
     "Agente Operacional";
 
   return (
     <div className="flex h-dvh overflow-hidden">
       {!barraRecolhida && (
         <BarraLateral
-          historico={historico}
-          carregando={carregandoHistorico}
-          conversaAtivaId={conversaAtivaId}
-          sessao={sessao}
+          estado={conversas.estado}
+          conversaAtivaId={conversas.conversaAtivaId}
+          sessao={conversas.sessao}
+          erroAcao={conversas.erroAcao}
           aberta={barraAberta}
           onFechar={() => setBarraAberta(false)}
           onRecolher={() => setBarraRecolhida(true)}
           onNovoChat={novoChat}
           onSelecionar={selecionarConversa}
-          onRenomear={renomear}
-          onArquivar={arquivar}
+          onRenomear={conversas.renomear}
+          onArquivar={conversas.arquivar}
         />
       )}
 

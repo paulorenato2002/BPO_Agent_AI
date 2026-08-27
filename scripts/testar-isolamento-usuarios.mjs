@@ -182,11 +182,25 @@ try {
     checar("A (analista) propõe memória de empresa", !erroProp && Boolean(memEmpresa));
 
     // Analista não pode ativar.
-    const { error: erroAtivarA } = await clienteA
+    //
+    // A RLS não devolve erro: a política de UPDATE simplesmente não deixa a
+    // linha entrar no escopo, então o comando afeta 0 linhas silenciosamente.
+    // Por isso verificamos o ESTADO RESULTANTE, e não a presença de erro —
+    // esperar exceção aqui daria falso negativo.
+    await clienteA
       .from("memorias_agente")
       .update({ status: "ativa", aprovada_por: a.id, aprovada_em: new Date().toISOString() })
       .eq("id", memEmpresa.id);
-    checar("A (analista) NÃO ativa memória de empresa", Boolean(erroAtivarA));
+
+    const { data: aposTentativaA } = await admin
+      .from("memorias_agente")
+      .select("status")
+      .eq("id", memEmpresa.id)
+      .single();
+    checar(
+      "A (analista) NÃO ativa memória de empresa (segue pendente)",
+      aposTentativaA?.status !== "ativa"
+    );
 
     // Supervisor pode.
     const { data: ativada, error: erroAtivarB } = await clienteB

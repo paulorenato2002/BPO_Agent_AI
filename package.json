@@ -11,7 +11,10 @@
     "test": "node --conditions=react-server --import tsx --test testes/**/*.test.ts",
     "test:migrations": "bash scripts/testar-migrations.sh",
     "test:conexoes": "node scripts/testar-conexoes-reais.mjs",
-    "verificar": "npm run typecheck && npm run lint && npm test"
+    "verificar": "npm run typecheck && npm run lint && npm test",
+    "test:isolamento": "node scripts/testar-isolamento-usuarios.mjs",
+    "test:historico": "node scripts/testar-historico.mjs",
+    "test:concorrencia": "bash scripts/testar-concorrencia-chats.sh"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.5",

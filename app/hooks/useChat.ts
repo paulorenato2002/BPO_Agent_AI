@@ -5,6 +5,7 @@ import type { Mensagem } from "../componentes/tipos";
 import type { AnexoPendente } from "../componentes/CampoMensagem";
 
 type EventoStream =
+  | { type: "titulo"; titulo: string }
   | { type: "status"; text: string }
   | { type: "delta"; text: string }
   | { type: "done"; messages: Mensagem[] }
@@ -32,6 +33,10 @@ export function useChat() {
   const [erro, setErro] = useState<string | null>(null);
   const [streamando, setStreamando] = useState(false);
 
+  // Conversa em que as mensagens serão persistidas. Guardado em ref para o
+  // stream em andamento não usar um valor defasado.
+  const conversaIdRef = useRef<string | null>(null);
+  const aoTituloRef = useRef<((titulo: string) => void) | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   // Guarda a última tentativa para o botão "tentar de novo".
   const ultimoEnvioRef = useRef<Mensagem[] | null>(null);
@@ -74,7 +79,7 @@ export function useChat() {
       const resposta = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: paraEnviar }),
+        body: JSON.stringify({ messages: paraEnviar, conversaId: conversaIdRef.current }),
         signal: controller.signal,
       });
 
@@ -98,7 +103,9 @@ export function useChat() {
           if (!linha.trim()) continue;
           const evento = JSON.parse(linha) as EventoStream;
 
-          if (evento.type === "status") {
+          if (evento.type === "titulo") {
+            aoTituloRef.current?.(evento.titulo);
+          } else if (evento.type === "status") {
             setStatus(evento.text);
           } else if (evento.type === "delta") {
             setStatus(null);
@@ -174,9 +181,48 @@ export function useChat() {
     if (historia) executar(historia);
   }, [executar]);
 
+  /** Define a conversa ativa (persistência) e quem recebe o título gerado. */
+  const definirConversa = useCallback(
+    (id: string | null, aoTitulo?: (titulo: string) => void) => {
+      conversaIdRef.current = id;
+      aoTituloRef.current = aoTitulo ?? null;
+    },
+    []
+  );
+
+  /** Carrega o histórico de uma conversa existente. */
+  const carregarConversa = useCallback(async (id: string) => {
+    parar();
+    setErro(null);
+    setTextoStreaming("");
+    try {
+      const resposta = await fetch(`/api/conversas/${id}/mensagens`, { cache: "no-store" });
+      const dados = await resposta.json();
+      if (!dados.ok) {
+        setErro(dados.mensagem ?? "Não foi possível abrir a conversa.");
+        setMensagens([]);
+        return;
+      }
+      setMensagens(
+        (dados.dados as Array<Record<string, unknown>>)
+          .filter((m) => m.papel === "usuario" || (m.papel === "agente" && m.conteudo))
+          .map((m) => ({
+            id: m.id as string,
+            papel: m.papel as Mensagem["papel"],
+            conteudo: m.conteudo as string | null,
+            criadaEm: m.criadaEm as string,
+          }))
+      );
+    } catch {
+      setErro("Falha de rede ao abrir a conversa.");
+    }
+  }, [parar]);
+
   return {
     mensagens,
     setMensagens,
+    definirConversa,
+    carregarConversa,
     textoStreaming,
     status,
     erro,

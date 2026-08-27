@@ -5,6 +5,13 @@ import type {
 import { openai, CHAT_MODEL, REASONING_EFFORT } from "@/lib/openai-client";
 import { dbTools, executeDbTool } from "@/lib/db-tools";
 import { fileTools, executeFileTool } from "@/lib/file-tools";
+import { usuarioAtual } from "@/lib/auth/usuario";
+import {
+  conversaPertenceAoUsuario,
+  salvarMensagem,
+  atualizarMensagem,
+  definirTituloSeNecessario,
+} from "@/lib/repositorios/conversas";
 
 export const dynamic = "force-dynamic";
 
@@ -78,8 +85,46 @@ function sseLine(obj: unknown): Uint8Array {
 }
 
 export async function POST(request: Request) {
+  const usuario = await usuarioAtual();
+  if (!usuario) {
+    return Response.json(
+      { erro: "Sessão expirada. Entre novamente." },
+      { status: 401 }
+    );
+  }
+
   const body = await request.json();
   const clientMessages = (body?.messages ?? []) as ChatCompletionMessageParam[];
+  const conversaId =
+    typeof body?.conversaId === "string" ? body.conversaId : null;
+
+  // A conversa precisa ser do próprio usuário. Sem isso, um id de outra pessoa
+  // no corpo da requisição gravaria mensagem na conversa alheia.
+  let persistir = false;
+  if (conversaId) {
+    persistir = await conversaPertenceAoUsuario(usuario.id, conversaId);
+    if (!persistir) {
+      return Response.json({ erro: "Conversa não encontrada." }, { status: 404 });
+    }
+  }
+
+  const ultimaDoUsuario = [...clientMessages]
+    .reverse()
+    .find((m) => m.role === "user");
+  const textoUsuario =
+    typeof ultimaDoUsuario?.content === "string" ? ultimaDoUsuario.content : "";
+
+  // A mensagem do usuário é gravada como CONCLUÍDA antes de chamar o modelo.
+  // Se a geração falhar depois, o que a pessoa escreveu não se perde.
+  let tituloNovo: string | null = null;
+  if (persistir && conversaId && textoUsuario) {
+    await salvarMensagem(conversaId, {
+      papel: "usuario",
+      conteudo: textoUsuario,
+      status: "concluida",
+    });
+    tituloNovo = await definirTituloSeNecessario(conversaId, textoUsuario);
+  }
 
   const messages: ChatCompletionMessageParam[] = [
     { role: "system", content: SYSTEM_PROMPT },
@@ -89,6 +134,22 @@ export async function POST(request: Request) {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const send = (obj: unknown) => controller.enqueue(sseLine(obj));
+
+      // Reserva a resposta do agente já como "processando", para que uma falha
+      // no meio do caminho deixe rastro em vez de sumir.
+      let mensagemAgenteId: string | null = null;
+      if (persistir && conversaId) {
+        const r = await salvarMensagem(conversaId, {
+          papel: "agente",
+          conteudo: null,
+          status: "processando",
+        });
+        if (r.ok) mensagemAgenteId = r.dados;
+      }
+
+      if (tituloNovo) send({ type: "titulo", titulo: tituloNovo });
+
+      let textoFinal = "";
 
       try {
         for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
@@ -112,6 +173,7 @@ export async function POST(request: Request) {
 
             if (delta.content) {
               content += delta.content;
+              textoFinal += delta.content;
               send({ type: "delta", text: delta.content });
             }
 
@@ -150,6 +212,12 @@ export async function POST(request: Request) {
           });
 
           if (toolCalls.length === 0) {
+            if (mensagemAgenteId) {
+              await atualizarMensagem(mensagemAgenteId, {
+                conteudo: textoFinal,
+                status: "concluida",
+              });
+            }
             send({ type: "done", messages: messages.slice(1) });
             controller.close();
             return;
@@ -171,12 +239,29 @@ export async function POST(request: Request) {
           }
         }
 
+        if (mensagemAgenteId) {
+          await atualizarMensagem(mensagemAgenteId, {
+            conteudo: textoFinal || null,
+            status: "erro",
+            tipoMensagem: "erro",
+          });
+        }
         send({
           type: "error",
           message: "Número máximo de chamadas de ferramentas atingido.",
         });
         controller.close();
       } catch (err) {
+        // A mensagem do usuário já está gravada; aqui só registramos que a
+        // resposta falhou, sem apagar nada.
+        if (mensagemAgenteId) {
+          await atualizarMensagem(mensagemAgenteId, {
+            conteudo: textoFinal || null,
+            status: "erro",
+            tipoMensagem: "erro",
+            metadados: { erro: err instanceof Error ? err.message : String(err) },
+          });
+        }
         send({
           type: "error",
           message: err instanceof Error ? err.message : String(err),
