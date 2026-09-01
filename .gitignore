@@ -34,6 +34,19 @@ yarn-error.log*
 .env*
 !.env.example
 
+# credenciais de integração — NUNCA versionar
+# O Google Cloud entrega o OAuth client como .json; baixar na pasta do projeto
+# é o caminho natural e o jeito mais fácil de vazar segredo por engano.
+client_secret*.json
+credentials*.json
+token*.json
+*-oauth.json
+/tokens/
+/segredos/
+*.pem
+*.p12
+*.key
+
 # vercel
 .vercel
 

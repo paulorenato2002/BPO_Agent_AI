@@ -14,7 +14,9 @@
     "verificar": "npm run typecheck && npm run lint && npm test",
     "test:isolamento": "node scripts/testar-isolamento-usuarios.mjs",
     "test:historico": "node scripts/testar-historico.mjs",
-    "test:concorrencia": "bash scripts/testar-concorrencia-chats.sh"
+    "test:concorrencia": "bash scripts/testar-concorrencia-chats.sh",
+    "drive:bootstrap": "node scripts/drive-bootstrap.mjs",
+    "drive:verificar": "node scripts/drive-verificar.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.5",

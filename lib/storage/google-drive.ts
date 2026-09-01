@@ -1,5 +1,10 @@
 import "server-only";
-import { createSign } from "node:crypto";
+import {
+  obterAccessToken,
+  lerConfigOAuth,
+  ehConfigFaltando,
+  _limparCacheToken as limparCacheOAuth,
+} from "../integracoes/google-oauth";
 import type {
   AdapterArmazenamento,
   ParametrosEnvio,
@@ -12,111 +17,48 @@ import type {
 } from "./tipos";
 
 /**
- * Adapter do Google Drive via conta de serviço.
+ * Adapter do Google Drive.
  *
- * Implementado com `fetch` + `node:crypto` (JWT RS256 assinado localmente),
- * sem a dependência `googleapis` — que traz dezenas de MB e centenas de APIs
- * que não usamos.
+ * AUTENTICAÇÃO: OAuth 2.0 com conta Google HUMANA e acesso offline. O token é
+ * obtido em lib/integracoes/google-oauth.ts a partir do refresh token — este
+ * arquivo cuida só das OPERAÇÕES do Drive (pastas, upload, download, cópia).
  *
- * ESTADO ATUAL: as credenciais NÃO estão configuradas neste ambiente. O adapter
- * está completo e coberto por testes com mock, mas nenhum upload real foi
- * validado. Enquanto faltar credencial, todo método retorna
- * `naoConfigurado: true` — nunca um sucesso simulado.
+ * A implementação anterior usava conta de serviço com JWT RS256; as operações
+ * foram preservadas e apenas a camada de autenticação mudou.
  *
- * Variáveis necessárias para ativar:
- *   GOOGLE_DRIVE_CLIENT_EMAIL   e-mail da conta de serviço
- *   GOOGLE_DRIVE_PRIVATE_KEY    chave privada PEM (\n escapados são aceitos)
- *   GOOGLE_DRIVE_PASTA_RAIZ_ID  ID da pasta raiz onde os documentos vão
- *   GOOGLE_DRIVE_SUBJECT        (opcional) e-mail para delegação domain-wide
+ * ESCOPO: `drive.file` — o app só acessa o que ele mesmo criou. Todas as
+ * operações ficam confinadas a GOOGLE_DRIVE_PASTA_RAIZ_ID.
+ *
+ * Variáveis (nenhuma NEXT_PUBLIC_):
+ *   GOOGLE_DRIVE_CLIENT_ID
+ *   GOOGLE_DRIVE_CLIENT_SECRET
+ *   GOOGLE_DRIVE_REFRESH_TOKEN
+ *   GOOGLE_DRIVE_PASTA_RAIZ_ID
  */
 
-const ESCOPO = "https://www.googleapis.com/auth/drive";
-const URL_TOKEN = "https://oauth2.googleapis.com/token";
 const URL_API = "https://www.googleapis.com/drive/v3";
 const URL_UPLOAD = "https://www.googleapis.com/upload/drive/v3";
 
-type Credenciais = {
-  clientEmail: string;
-  privateKey: string;
-  pastaRaizId: string;
-  subject?: string;
-};
+type Credenciais = { pastaRaizId: string };
 
 function lerCredenciais(): Credenciais | { faltando: string[] } {
-  const clientEmail = process.env.GOOGLE_DRIVE_CLIENT_EMAIL;
-  // A chave costuma vir com \n escapado quando guardada em .env de uma linha.
-  const privateKey = process.env.GOOGLE_DRIVE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+  const config = lerConfigOAuth();
   const pastaRaizId = process.env.GOOGLE_DRIVE_PASTA_RAIZ_ID;
+  const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN;
 
-  const faltando: string[] = [];
-  if (!clientEmail) faltando.push("GOOGLE_DRIVE_CLIENT_EMAIL");
-  if (!privateKey) faltando.push("GOOGLE_DRIVE_PRIVATE_KEY");
+  const faltando: string[] = ehConfigFaltando(config) ? [...config.faltando] : [];
+  if (!refreshToken) faltando.push("GOOGLE_DRIVE_REFRESH_TOKEN");
   if (!pastaRaizId) faltando.push("GOOGLE_DRIVE_PASTA_RAIZ_ID");
   if (faltando.length > 0) return { faltando };
 
-  return {
-    clientEmail: clientEmail!,
-    privateKey: privateKey!,
-    pastaRaizId: pastaRaizId!,
-    subject: process.env.GOOGLE_DRIVE_SUBJECT,
-  };
+  return { pastaRaizId: pastaRaizId! };
 }
 
-function base64url(entrada: Buffer | string): string {
-  return Buffer.from(entrada)
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-}
-
-/** Token em cache; renovado com folga antes de expirar. */
-let tokenCache: { token: string; expiraEm: number } | null = null;
-
-async function obterAccessToken(cred: Credenciais): Promise<string> {
-  if (tokenCache && tokenCache.expiraEm > Date.now() + 60_000) {
-    return tokenCache.token;
-  }
-
-  const agora = Math.floor(Date.now() / 1000);
-  const cabecalho = base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const claims = base64url(
-    JSON.stringify({
-      iss: cred.clientEmail,
-      scope: ESCOPO,
-      aud: URL_TOKEN,
-      iat: agora,
-      exp: agora + 3600,
-      ...(cred.subject ? { sub: cred.subject } : {}),
-    })
-  );
-
-  const assinatura = createSign("RSA-SHA256")
-    .update(`${cabecalho}.${claims}`)
-    .sign(cred.privateKey);
-
-  const jwt = `${cabecalho}.${claims}.${base64url(assinatura)}`;
-
-  const resposta = await fetch(URL_TOKEN, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion: jwt,
-    }),
-  });
-
-  if (!resposta.ok) {
-    // Nunca registrar o corpo completo: pode conter detalhes da credencial.
-    throw new Error(`Falha na autenticação do Google Drive (HTTP ${resposta.status}).`);
-  }
-
-  const dados = (await resposta.json()) as { access_token: string; expires_in: number };
-  tokenCache = {
-    token: dados.access_token,
-    expiraEm: Date.now() + dados.expires_in * 1000,
-  };
-  return dados.access_token;
+/** Delega a obtenção do token ao módulo OAuth (cache em memória lá). */
+async function tokenDeAcesso(): Promise<string> {
+  const r = await obterAccessToken();
+  if (!r.ok) throw new Error(r.erro);
+  return r.accessToken;
 }
 
 function mensagemErro(e: unknown): string {
@@ -151,7 +93,7 @@ export class GoogleDriveAdapter implements AdapterArmazenamento {
     url: string,
     init: RequestInit = {}
   ): Promise<Response> {
-    const token = await obterAccessToken(cred);
+    const token = await tokenDeAcesso();
     return fetch(url, {
       ...init,
       headers: {
@@ -520,5 +462,5 @@ export const googleDrive = new GoogleDriveAdapter();
 
 /** Exposto para os testes poderem limpar o cache de token entre casos. */
 export function _limparCacheToken(): void {
-  tokenCache = null;
+  limparCacheOAuth();
 }

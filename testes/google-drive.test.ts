@@ -1,23 +1,19 @@
 import { test, describe, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { generateKeyPairSync } from "node:crypto";
 
 import { GoogleDriveAdapter, _limparCacheToken } from "../lib/storage/google-drive";
 
 /**
  * Testes do adapter do Google Drive com `fetch` mockado.
  *
- * NENHUMA chamada real é feita ao Google. Estes testes provam que o adapter
- * monta as requisições corretas e — principalmente — que ele NUNCA reporta
- * sucesso quando as credenciais estão ausentes.
+ * O adapter passou de conta de serviço (JWT RS256) para OAuth 2.0 com conta
+ * humana. As OPERAÇÕES continuam as mesmas; muda como o token é obtido.
+ *
+ * NENHUMA chamada real é feita ao Google. Prova que o adapter monta as
+ * requisições certas e — principalmente — que NUNCA reporta sucesso sem
+ * credencial.
  */
 
-// Chave RSA de teste, gerada em memória. Não é credencial de ninguém.
-const { privateKey } = generateKeyPairSync("rsa", {
-  modulusLength: 2048,
-  privateKeyEncoding: { type: "pkcs8", format: "pem" },
-  publicKeyEncoding: { type: "spki", format: "pem" },
-});
 
 const ENV_ORIGINAL = { ...process.env };
 const fetchOriginal = globalThis.fetch;
@@ -26,15 +22,23 @@ type Chamada = { url: string; metodo: string };
 let chamadas: Chamada[] = [];
 
 function configurarCredenciais() {
-  process.env.GOOGLE_DRIVE_CLIENT_EMAIL = "servico@projeto.iam.gserviceaccount.com";
-  process.env.GOOGLE_DRIVE_PRIVATE_KEY = privateKey as string;
+  process.env.GOOGLE_DRIVE_CLIENT_ID = "id-teste.apps.googleusercontent.com";
+  process.env.GOOGLE_DRIVE_CLIENT_SECRET = "segredo-teste";
+  process.env.GOOGLE_DRIVE_REDIRECT_URI = "http://localhost:3000/cb";
+  process.env.GOOGLE_DRIVE_REFRESH_TOKEN = "rt-teste";
   process.env.GOOGLE_DRIVE_PASTA_RAIZ_ID = "raiz123";
 }
 
 function limparCredenciais() {
-  delete process.env.GOOGLE_DRIVE_CLIENT_EMAIL;
-  delete process.env.GOOGLE_DRIVE_PRIVATE_KEY;
-  delete process.env.GOOGLE_DRIVE_PASTA_RAIZ_ID;
+  for (const v of [
+    "GOOGLE_DRIVE_CLIENT_ID",
+    "GOOGLE_DRIVE_CLIENT_SECRET",
+    "GOOGLE_DRIVE_REDIRECT_URI",
+    "GOOGLE_DRIVE_REFRESH_TOKEN",
+    "GOOGLE_DRIVE_PASTA_RAIZ_ID",
+  ]) {
+    delete process.env[v];
+  }
 }
 
 function json(corpo: unknown, status = 200): Response {
@@ -55,6 +59,7 @@ function instalarMockDrive(opcoes: { arquivosExistentes?: string[] } = {}) {
     const url = typeof entrada === "string" ? entrada : entrada.toString();
     chamadas.push({ url, metodo: init?.method ?? "GET" });
 
+    // Renovação do access token a partir do refresh token.
     if (url.startsWith("https://oauth2.googleapis.com/token")) {
       return json({ access_token: "token-de-teste", expires_in: 3600 });
     }
@@ -115,12 +120,12 @@ describe("Google Drive — integração NÃO configurada", () => {
 
     assert.equal(r.ok, false, "não pode fingir sucesso");
     assert.ok(!r.ok && r.naoConfigurado === true, "deve marcar como não configurado");
-    assert.match(r.ok === false ? r.erro : "", /GOOGLE_DRIVE_CLIENT_EMAIL/);
+    assert.match(r.ok === false ? r.erro : "", /GOOGLE_DRIVE_CLIENT_ID/);
   });
 
   test("a mensagem lista exatamente as variáveis que faltam", async () => {
     limparCredenciais();
-    process.env.GOOGLE_DRIVE_CLIENT_EMAIL = "x@y.z";
+    process.env.GOOGLE_DRIVE_CLIENT_ID = "x";
 
     const r = await new GoogleDriveAdapter().enviar({
       caminho: "a/b.txt",
@@ -130,9 +135,9 @@ describe("Google Drive — integração NÃO configurada", () => {
 
     assert.equal(r.ok, false);
     const erro = r.ok === false ? r.erro : "";
-    assert.ok(!erro.includes("GOOGLE_DRIVE_CLIENT_EMAIL"), "não deve listar a que existe");
-    assert.match(erro, /GOOGLE_DRIVE_PRIVATE_KEY/);
-    assert.match(erro, /GOOGLE_DRIVE_PASTA_RAIZ_ID/);
+    assert.ok(!erro.includes("GOOGLE_DRIVE_CLIENT_ID"), "não deve listar a que existe");
+    assert.match(erro, /GOOGLE_DRIVE_CLIENT_SECRET/);
+    assert.match(erro, /GOOGLE_DRIVE_REFRESH_TOKEN/);
   });
 
   test("healthCheck() reporta não configurado, sem chamar a rede", async () => {
@@ -169,7 +174,7 @@ describe("Google Drive — com credenciais (mock)", () => {
     }
   });
 
-  test("autentica via JWT antes de subir o arquivo", async () => {
+  test("renova o access token antes de subir o arquivo", async () => {
     configurarCredenciais();
     instalarMockDrive();
 
@@ -181,7 +186,7 @@ describe("Google Drive — com credenciais (mock)", () => {
 
     const token = chamadas.findIndex((c) => c.url.includes("oauth2.googleapis.com/token"));
     const upload = chamadas.findIndex((c) => c.url.includes("/upload/drive/v3/files"));
-    assert.ok(token >= 0, "deveria pedir access token");
+    assert.ok(token >= 0, "deveria renovar o access token");
     assert.ok(upload > token, "o upload precisa vir depois da autenticação");
   });
 
@@ -261,6 +266,6 @@ describe("Google Drive — com credenciais (mock)", () => {
     assert.equal(r.ok, false);
     const erro = r.ok === false ? r.erro : "";
     assert.ok(!erro.includes("chave privada"), "mensagem não pode vazar detalhe da credencial");
-    assert.match(erro, /HTTP 401/);
+    assert.match(erro, /HTTP 401|Falha ao renovar/);
   });
 });
