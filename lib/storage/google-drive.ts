@@ -149,6 +149,89 @@ export class GoogleDriveAdapter implements AdapterArmazenamento {
     return dados.id;
   }
 
+  /**
+   * Lista TODAS as pastas com um dado nome dentro de um pai.
+   *
+   * `localizarPasta` devolve só a primeira e serve para o caminho feliz. Aqui
+   * queremos enxergar duplicatas: o Drive permite duas pastas com o mesmo nome
+   * no mesmo pai, então duas execuções concorrentes conseguem criar irmãs
+   * idênticas. O resolvedor usa esta lista para convergir sempre na MAIS
+   * ANTIGA, sem precisar apagar nada.
+   *
+   * Ordenada por data de criação (mais antiga primeiro), com o id como
+   * desempate para a ordem ser total e determinística.
+   */
+  async listarPastasPorNome(
+    nome: string,
+    paiId: string
+  ): Promise<{ id: string; createdTime: string }[]> {
+    const cred = lerCredenciais();
+    if ("faltando" in cred) return [];
+
+    const q = [
+      `name = '${escaparQuery(nome)}'`,
+      `'${escaparQuery(paiId)}' in parents`,
+      "mimeType = 'application/vnd.google-apps.folder'",
+      "trashed = false",
+    ].join(" and ");
+
+    const resposta = await this.requisitar(
+      cred,
+      `${URL_API}/files?q=${encodeURIComponent(q)}` +
+        `&fields=files(id,name,createdTime)&pageSize=100` +
+        `&supportsAllDrives=true&includeItemsFromAllDrives=true`
+    );
+    if (!resposta.ok) {
+      throw new Error(`Falha ao listar a pasta "${nome}" (HTTP ${resposta.status}).`);
+    }
+
+    const dados = (await resposta.json()) as {
+      files?: { id: string; createdTime?: string }[];
+    };
+
+    return (dados.files ?? [])
+      .map((f) => ({ id: f.id, createdTime: f.createdTime ?? "" }))
+      .sort((a, b) =>
+        a.createdTime === b.createdTime
+          ? a.id.localeCompare(b.id)
+          : a.createdTime.localeCompare(b.createdTime)
+      );
+  }
+
+  /**
+   * Cria uma pasta SEM checar se já existe.
+   *
+   * Existe separada de `criarPasta` porque o resolvedor faz a própria
+   * checagem (e a própria reconciliação de duplicatas) — checar de novo aqui
+   * só ampliaria a janela de corrida.
+   */
+  async criarPastaBruta(nome: string, paiId: string): Promise<string> {
+    const cred = lerCredenciais();
+    if ("faltando" in cred) throw new Error("Google Drive não configurado.");
+
+    const resposta = await this.requisitar(cred, `${URL_API}/files?supportsAllDrives=true`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: nome,
+        mimeType: "application/vnd.google-apps.folder",
+        parents: [paiId],
+      }),
+    });
+
+    if (!resposta.ok) {
+      throw new Error(`Não foi possível criar a pasta "${nome}" (HTTP ${resposta.status}).`);
+    }
+    const dados = (await resposta.json()) as { id: string };
+    return dados.id;
+  }
+
+  /** ID da pasta raiz configurada, ou null se a integração não está pronta. */
+  pastaRaizId(): string | null {
+    const cred = lerCredenciais();
+    return "faltando" in cred ? null : cred.pastaRaizId;
+  }
+
   /** Garante toda a árvore de pastas de um caminho, devolvendo o ID da folha. */
   private async garantirCaminho(cred: Credenciais, pastas: string[]): Promise<string> {
     let paiId = cred.pastaRaizId;
