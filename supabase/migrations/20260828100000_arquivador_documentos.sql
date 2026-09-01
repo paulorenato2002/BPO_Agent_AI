@@ -22,6 +22,29 @@
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
+-- 0. Dependência: trigger de auditoria
+--
+-- Esta migration usa `op_set_updated_at`, criada em
+-- 20260826120000_operacional_fundacao.sql. Recriamos aqui com `create or
+-- replace` para que o arquivo seja AUTOSSUFICIENTE: rodar fora de ordem, num
+-- banco novo, ou num editor com search_path diferente não deve quebrá-lo.
+--
+-- `create or replace` com corpo idêntico é inofensivo se a função já existir —
+-- os triggers existentes continuam apontando para ela normalmente.
+-- -----------------------------------------------------------------------------
+
+create or replace function public.op_set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+
+-- -----------------------------------------------------------------------------
 -- 1. regras_arquivamento
 -- -----------------------------------------------------------------------------
 
@@ -221,7 +244,32 @@ create unique index if not exists documentos_op_versao_uk
 
 -- -----------------------------------------------------------------------------
 -- 5. RLS
+--
+-- As políticas usam `op_usuario_interno_ativo`, criada na migration de
+-- fundação. Pelo mesmo motivo do bloco 0, recriamos aqui: o arquivo precisa
+-- rodar sozinho. `security definer` + search_path fixo é obrigatório — sem
+-- isso a política que lê perfis_usuarios entraria em recursão com a própria
+-- RLS daquela tabela.
 -- -----------------------------------------------------------------------------
+
+create or replace function public.op_usuario_interno_ativo()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_catalog
+as $$
+  select exists (
+    select 1
+    from public.perfis_usuarios p
+    where p.usuario_id = auth.uid()
+      and p.ativo
+  );
+$$;
+
+revoke all on function public.op_usuario_interno_ativo() from public, anon;
+grant execute on function public.op_usuario_interno_ativo() to authenticated, service_role;
+
 
 alter table public.regras_arquivamento     enable row level security;
 alter table public.pastas_drive            enable row level security;
