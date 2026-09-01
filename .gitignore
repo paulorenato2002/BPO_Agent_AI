@@ -34,6 +34,14 @@ yarn-error.log*
 .env*
 !.env.example
 
+# mapeamento do acervo real — contém nomes de clientes e de arquivos reais.
+# Serve de insumo para o desenho da estrutura, mas é dado de cliente: fica fora
+# do repositório.
+arvore_effective_bpo.txt
+mapear_estrutura_effective_bpo.py
+/mapeamento/
+*_estrutura_*.txt
+
 # credenciais de integração — NUNCA versionar
 # O Google Cloud entrega o OAuth client como .json; baixar na pasta do projeto
 # é o caminho natural e o jeito mais fácil de vazar segredo por engano.

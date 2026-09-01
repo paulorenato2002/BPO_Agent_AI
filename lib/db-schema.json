@@ -1,4 +1,84 @@
 {
+  "vw_documentos_por_empresa_competencia": [
+    {
+      "nome": "empresa_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "empresas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "empresa_codigo",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "empresa_razao_social",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "competencia_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "competencias_operacionais",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "competencia_ano",
+      "tipo": "smallint",
+      "obrigatorio": false
+    },
+    {
+      "nome": "competencia_mes",
+      "tipo": "smallint",
+      "obrigatorio": false
+    },
+    {
+      "nome": "competencia_referencia",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "tipo_documento",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "total_documentos",
+      "tipo": "bigint",
+      "obrigatorio": false
+    },
+    {
+      "nome": "total_armazenados",
+      "tipo": "bigint",
+      "obrigatorio": false
+    },
+    {
+      "nome": "total_parciais",
+      "tipo": "bigint",
+      "obrigatorio": false
+    },
+    {
+      "nome": "total_com_erro",
+      "tipo": "bigint",
+      "obrigatorio": false
+    },
+    {
+      "nome": "bytes_totais",
+      "tipo": "numeric",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ultimo_recebimento",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": false
+    }
+  ],
   "grupos_comunicacao": [
     {
       "nome": "id",
@@ -89,6 +169,147 @@
       "nome": "updated_by",
       "tipo": "uuid",
       "obrigatorio": false
+    }
+  ],
+  "vw_execucoes_erro": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "pk": true
+    },
+    {
+      "nome": "ferramenta_codigo",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ferramenta_versao",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "tentativas",
+      "tipo": "smallint",
+      "obrigatorio": false
+    },
+    {
+      "nome": "erro_codigo",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "erro_mensagem",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "criada_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": false
+    },
+    {
+      "nome": "concluida_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": false
+    },
+    {
+      "nome": "empresa_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "empresas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "empresa_codigo",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "empresa_razao_social",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "usuario_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "perfis_usuarios",
+        "coluna": "usuario_id"
+      }
+    },
+    {
+      "nome": "usuario_nome",
+      "tipo": "text",
+      "obrigatorio": false
+    }
+  ],
+  "feedback_agente": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "usuario_id",
+      "tipo": "uuid",
+      "obrigatorio": true
+    },
+    {
+      "nome": "conversa_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "conversas_agente",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "mensagem_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "mensagens_agente",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "tipo_feedback",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "comentario",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "correcao_proposta",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "gerou_memoria_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "memorias_agente",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "metadados",
+      "tipo": "jsonb",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
     }
   ],
   "precificacoes": [
@@ -400,6 +621,731 @@
     {
       "nome": "ativo",
       "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "execucoes_ferramenta": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "ferramenta_codigo",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "ferramenta_versao",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "usuario_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "perfis_usuarios",
+        "coluna": "usuario_id"
+      }
+    },
+    {
+      "nome": "empresa_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "empresas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "competencia_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "competencias_operacionais",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "tarefa_operacional_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "tarefas_operacionais",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "entrada",
+      "tipo": "jsonb",
+      "obrigatorio": true
+    },
+    {
+      "nome": "saida",
+      "tipo": "jsonb",
+      "obrigatorio": false
+    },
+    {
+      "nome": "status",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "tentativas",
+      "tipo": "smallint",
+      "obrigatorio": true
+    },
+    {
+      "nome": "criada_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "iniciada_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": false
+    },
+    {
+      "nome": "concluida_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": false
+    },
+    {
+      "nome": "duracao_ms",
+      "tipo": "integer",
+      "obrigatorio": false
+    },
+    {
+      "nome": "erro_codigo",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "erro_mensagem",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "chave_idempotencia",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "metadados",
+      "tipo": "jsonb",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "vw_tarefas_hoje": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "pk": true
+    },
+    {
+      "nome": "titulo",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "status",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "prioridade",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "prazo",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "empresa_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "empresas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "empresa_codigo",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "empresa_razao_social",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "responsavel_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "perfis_usuarios",
+        "coluna": "usuario_id"
+      }
+    },
+    {
+      "nome": "responsavel_nome",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "competencia_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "competencias_operacionais",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "competencia_ano",
+      "tipo": "smallint",
+      "obrigatorio": false
+    },
+    {
+      "nome": "competencia_mes",
+      "tipo": "smallint",
+      "obrigatorio": false
+    },
+    {
+      "nome": "iniciada_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": false
+    },
+    {
+      "nome": "duracao_estimada_minutos",
+      "tipo": "integer",
+      "obrigatorio": false
+    }
+  ],
+  "documentos_operacionais": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "empresa_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "empresas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "competencia_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "competencias_operacionais",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "tipo_documento",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "nome_original",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "nome_padronizado",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "extensao",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "mime_type",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "tamanho_bytes",
+      "tipo": "bigint",
+      "obrigatorio": false
+    },
+    {
+      "nome": "hash_sha256",
+      "tipo": "character",
+      "obrigatorio": true
+    },
+    {
+      "nome": "data_documento",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "versao",
+      "tipo": "integer",
+      "obrigatorio": true
+    },
+    {
+      "nome": "documento_anterior_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "documentos_operacionais",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "status",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "origem",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "metadados",
+      "tipo": "jsonb",
+      "obrigatorio": true
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "aprovacoes_operacionais": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "execucao_ferramenta_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "execucoes_ferramenta",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "tarefa_operacional_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "tarefas_operacionais",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "empresa_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "empresas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "acao",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "nivel_risco",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "descricao",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "payload",
+      "tipo": "jsonb",
+      "obrigatorio": true
+    },
+    {
+      "nome": "solicitante_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "perfis_usuarios",
+        "coluna": "usuario_id"
+      }
+    },
+    {
+      "nome": "aprovador_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "perfis_usuarios",
+        "coluna": "usuario_id"
+      }
+    },
+    {
+      "nome": "decisao",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "solicitada_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "decidida_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": false
+    },
+    {
+      "nome": "expira_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": false
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "notificacoes_operacionais": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "usuario_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "perfis_usuarios",
+        "coluna": "usuario_id"
+      }
+    },
+    {
+      "nome": "empresa_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "empresas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "tipo",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "canal",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "titulo",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "mensagem",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "status",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "agendada_para",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": false
+    },
+    {
+      "nome": "enviada_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": false
+    },
+    {
+      "nome": "lida_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": false
+    },
+    {
+      "nome": "erro_mensagem",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "chave_deduplicacao",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "metadados",
+      "tipo": "jsonb",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "vw_tarefas_semana": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "pk": true
+    },
+    {
+      "nome": "titulo",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "status",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "prioridade",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "prazo",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "empresa_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "empresas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "empresa_codigo",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "empresa_razao_social",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "responsavel_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "perfis_usuarios",
+        "coluna": "usuario_id"
+      }
+    },
+    {
+      "nome": "responsavel_nome",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "competencia_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "competencias_operacionais",
+        "coluna": "id"
+      }
+    }
+  ],
+  "documento_localizacoes": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "documento_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "documentos_operacionais",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "provedor",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "integracao",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "bucket_ou_pasta",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "caminho",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "identificador_externo",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "nome_utilizado",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "status",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "armazenado_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": false
+    },
+    {
+      "nome": "erro_mensagem",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "metadados",
+      "tipo": "jsonb",
       "obrigatorio": true
     },
     {
@@ -849,6 +1795,145 @@
       "obrigatorio": false
     }
   ],
+  "memoria_utilizacoes": [
+    {
+      "nome": "id",
+      "tipo": "bigint",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "memoria_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "memorias_agente",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "conversa_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "conversas_agente",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "mensagem_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "mensagens_agente",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "execucao_ferramenta_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "execucoes_ferramenta",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "usuario_id",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "utilizada_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "resultado",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "metadados",
+      "tipo": "jsonb",
+      "obrigatorio": true
+    }
+  ],
+  "vw_tarefas_atrasadas": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "pk": true
+    },
+    {
+      "nome": "titulo",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "status",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "prioridade",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "prazo",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "dias_atraso",
+      "tipo": "integer",
+      "obrigatorio": false
+    },
+    {
+      "nome": "empresa_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "empresas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "empresa_codigo",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "empresa_razao_social",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "responsavel_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "perfis_usuarios",
+        "coluna": "usuario_id"
+      }
+    },
+    {
+      "nome": "responsavel_nome",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "competencia_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "competencias_operacionais",
+        "coluna": "id"
+      }
+    }
+  ],
   "historico_onboarding": [
     {
       "nome": "id",
@@ -959,6 +2044,44 @@
     {
       "nome": "created_by",
       "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "vw_horas_por_empresa": [
+    {
+      "nome": "empresa_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "pk": true
+    },
+    {
+      "nome": "empresa_codigo",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "empresa_razao_social",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "mes_referencia",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "total_apontamentos",
+      "tipo": "bigint",
+      "obrigatorio": false
+    },
+    {
+      "nome": "minutos_totais",
+      "tipo": "bigint",
+      "obrigatorio": false
+    },
+    {
+      "nome": "horas_totais",
+      "tipo": "numeric",
       "obrigatorio": false
     }
   ],
@@ -1109,6 +2232,42 @@
       "nome": "updated_by",
       "tipo": "uuid",
       "obrigatorio": false
+    }
+  ],
+  "mensagem_documentos": [
+    {
+      "nome": "id",
+      "tipo": "bigint",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "mensagem_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "mensagens_agente",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "documento_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "documentos_operacionais",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "papel_anexo",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
     }
   ],
   "onboardings": [
@@ -1314,6 +2473,71 @@
     {
       "nome": "updated_by",
       "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "vw_cronometros_ativos": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "pk": true
+    },
+    {
+      "nome": "usuario_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "perfis_usuarios",
+        "coluna": "usuario_id"
+      }
+    },
+    {
+      "nome": "usuario_nome",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "empresa_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "empresas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "empresa_codigo",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "empresa_razao_social",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "tarefa_operacional_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "tarefas_operacionais",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "tarefa_titulo",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "inicio",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": false
+    },
+    {
+      "nome": "minutos_decorridos",
+      "tipo": "integer",
       "obrigatorio": false
     }
   ],
@@ -1573,6 +2797,197 @@
       "obrigatorio": false
     }
   ],
+  "rotinas_empresa": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "empresa_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "empresas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "modelo_rotina_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "modelos_rotina",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "contrato_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "contratos",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "contrato_servico_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "contrato_servicos",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "responsavel_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "perfis_usuarios",
+        "coluna": "usuario_id"
+      }
+    },
+    {
+      "nome": "frequencia",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "prazo_dias",
+      "tipo": "smallint",
+      "obrigatorio": false
+    },
+    {
+      "nome": "prioridade",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "regra_agendamento",
+      "tipo": "jsonb",
+      "obrigatorio": true
+    },
+    {
+      "nome": "particularidades",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "configuracao",
+      "tipo": "jsonb",
+      "obrigatorio": true
+    },
+    {
+      "nome": "vigencia_inicio",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "vigencia_fim",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "situacao",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "perfis_usuarios": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "usuario_id",
+      "tipo": "uuid",
+      "obrigatorio": true
+    },
+    {
+      "nome": "nome",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "email",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "papel",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "departamento",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
   "tarefas_onboarding": [
     {
       "nome": "id",
@@ -1766,6 +3181,221 @@
       "obrigatorio": false
     }
   ],
+  "tarefas_operacionais": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "empresa_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "empresas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "competencia_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "competencias_operacionais",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "rotina_empresa_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "rotinas_empresa",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "modelo_rotina_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "modelos_rotina",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "etapa_atual_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "etapas_modelo_rotina",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "responsavel_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "perfis_usuarios",
+        "coluna": "usuario_id"
+      }
+    },
+    {
+      "nome": "titulo",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "descricao",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "prioridade",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "status",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "prazo",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "iniciada_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": false
+    },
+    {
+      "nome": "concluida_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": false
+    },
+    {
+      "nome": "duracao_estimada_minutos",
+      "tipo": "integer",
+      "obrigatorio": false
+    },
+    {
+      "nome": "duracao_real_minutos",
+      "tipo": "integer",
+      "obrigatorio": false
+    },
+    {
+      "nome": "origem",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "bloqueada",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "bloqueio_motivo",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "chave_idempotencia",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "metadados",
+      "tipo": "jsonb",
+      "obrigatorio": true
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "vw_operacao_por_empresa": [
+    {
+      "nome": "empresa_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "pk": true
+    },
+    {
+      "nome": "empresa_codigo",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "empresa_razao_social",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "status_operacao",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "tarefas_abertas",
+      "tipo": "bigint",
+      "obrigatorio": false
+    },
+    {
+      "nome": "tarefas_concluidas",
+      "tipo": "bigint",
+      "obrigatorio": false
+    },
+    {
+      "nome": "tarefas_atrasadas",
+      "tipo": "bigint",
+      "obrigatorio": false
+    },
+    {
+      "nome": "tarefas_bloqueadas",
+      "tipo": "bigint",
+      "obrigatorio": false
+    },
+    {
+      "nome": "tarefas_aguardando",
+      "tipo": "bigint",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ultima_movimentacao",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": false
+    }
+  ],
   "pessoas": [
     {
       "nome": "id",
@@ -1914,6 +3544,267 @@
       "nome": "custo_minuto",
       "tipo": "numeric",
       "obrigatorio": false
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "memorias_agente": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "tipo_memoria",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "escopo",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "usuario_id",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "empresa_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "empresas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "rotina_codigo",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ferramenta_codigo",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "titulo",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "conteudo",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "prioridade",
+      "tipo": "smallint",
+      "obrigatorio": true
+    },
+    {
+      "nome": "status",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "versao",
+      "tipo": "integer",
+      "obrigatorio": true
+    },
+    {
+      "nome": "memoria_anterior_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "memorias_agente",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "conversa_origem_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "conversas_agente",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "mensagem_origem_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "mensagens_agente",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "criada_por",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "aprovada_por",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "aprovada_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": false
+    },
+    {
+      "nome": "revogada_por",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "revogada_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": false
+    },
+    {
+      "nome": "motivo_revogacao",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "vigencia_inicio",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "vigencia_fim",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "metadados",
+      "tipo": "jsonb",
+      "obrigatorio": true
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "modelos_rotina": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "codigo",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "nome",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "categoria",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "descricao",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "versao",
+      "tipo": "integer",
+      "obrigatorio": true
+    },
+    {
+      "nome": "modelo_anterior_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "modelos_rotina",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "frequencia",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "duracao_estimada_minutos",
+      "tipo": "integer",
+      "obrigatorio": false
+    },
+    {
+      "nome": "situacao",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "instrucoes_gerais",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "configuracao",
+      "tipo": "jsonb",
+      "obrigatorio": true
     },
     {
       "nome": "observacoes",
@@ -2152,6 +4043,296 @@
       "obrigatorio": false
     }
   ],
+  "vw_execucoes_pendentes": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "pk": true
+    },
+    {
+      "nome": "ferramenta_codigo",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ferramenta_versao",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "status",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "tentativas",
+      "tipo": "smallint",
+      "obrigatorio": false
+    },
+    {
+      "nome": "criada_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": false
+    },
+    {
+      "nome": "iniciada_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": false
+    },
+    {
+      "nome": "empresa_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "empresas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "empresa_codigo",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "empresa_razao_social",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "usuario_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "perfis_usuarios",
+        "coluna": "usuario_id"
+      }
+    },
+    {
+      "nome": "usuario_nome",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "minutos_na_fila",
+      "tipo": "integer",
+      "obrigatorio": false
+    }
+  ],
+  "conversas_agente": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "usuario_id",
+      "tipo": "uuid",
+      "obrigatorio": true
+    },
+    {
+      "nome": "empresa_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "empresas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "titulo",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "status",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "resumo_contexto",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "iniciada_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "ultima_atividade_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "arquivada_em",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": false
+    },
+    {
+      "nome": "metadados",
+      "tipo": "jsonb",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    }
+  ],
+  "mensagens_agente": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "conversa_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "conversas_agente",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "papel",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "conteudo",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "tipo_mensagem",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "status",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "metadados",
+      "tipo": "jsonb",
+      "obrigatorio": true
+    },
+    {
+      "nome": "documento_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "documentos_operacionais",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "sequencia",
+      "tipo": "bigint",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    }
+  ],
+  "competencias_operacionais": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "empresa_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "empresas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "ano",
+      "tipo": "smallint",
+      "obrigatorio": true
+    },
+    {
+      "nome": "mes",
+      "tipo": "smallint",
+      "obrigatorio": true
+    },
+    {
+      "nome": "referencia",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "status",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "data_abertura",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "data_fechamento",
+      "tipo": "date",
+      "obrigatorio": false
+    },
+    {
+      "nome": "fechada_por",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "perfis_usuarios",
+        "coluna": "usuario_id"
+      }
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
   "modelos_precificacao": [
     {
       "nome": "id",
@@ -2255,6 +4436,220 @@
       "obrigatorio": true
     }
   ],
+  "etapas_modelo_rotina": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "modelo_rotina_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "modelos_rotina",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "codigo",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "nome",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "descricao",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ordem",
+      "tipo": "smallint",
+      "obrigatorio": true
+    },
+    {
+      "nome": "tipo_etapa",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "ferramenta_codigo",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "etapa_dependencia_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "etapas_modelo_rotina",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "obrigatoria",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "exige_aprovacao",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "exige_evidencia",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "duracao_estimada_minutos",
+      "tipo": "integer",
+      "obrigatorio": false
+    },
+    {
+      "nome": "instrucao_execucao",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "criterio_conclusao",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "configuracao",
+      "tipo": "jsonb",
+      "obrigatorio": true
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
+    },
+    {
+      "nome": "ativo",
+      "tipo": "boolean",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "eventos_operacionais": [
+    {
+      "nome": "id",
+      "tipo": "bigint",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "tipo_evento",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "entidade_tipo",
+      "tipo": "character varying",
+      "obrigatorio": false
+    },
+    {
+      "nome": "entidade_id",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "empresa_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "empresas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "competencia_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "competencias_operacionais",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "usuario_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "perfis_usuarios",
+        "coluna": "usuario_id"
+      }
+    },
+    {
+      "nome": "execucao_ferramenta_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "execucoes_ferramenta",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "documento_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "documentos_operacionais",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "severidade",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "descricao",
+      "tipo": "text",
+      "obrigatorio": true
+    },
+    {
+      "nome": "dados",
+      "tipo": "jsonb",
+      "obrigatorio": true
+    },
+    {
+      "nome": "origem",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    }
+  ],
   "precificacao_componentes": [
     {
       "nome": "id",
@@ -2340,6 +4735,86 @@
       "nome": "ativo",
       "tipo": "boolean",
       "obrigatorio": true
+    },
+    {
+      "nome": "created_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "updated_at",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "created_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    },
+    {
+      "nome": "updated_by",
+      "tipo": "uuid",
+      "obrigatorio": false
+    }
+  ],
+  "apontamentos_tempo": [
+    {
+      "nome": "id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "pk": true
+    },
+    {
+      "nome": "usuario_id",
+      "tipo": "uuid",
+      "obrigatorio": true,
+      "fk": {
+        "tabela": "perfis_usuarios",
+        "coluna": "usuario_id"
+      }
+    },
+    {
+      "nome": "empresa_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "empresas",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "tarefa_operacional_id",
+      "tipo": "uuid",
+      "obrigatorio": false,
+      "fk": {
+        "tabela": "tarefas_operacionais",
+        "coluna": "id"
+      }
+    },
+    {
+      "nome": "inicio",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": true
+    },
+    {
+      "nome": "fim",
+      "tipo": "timestamp with time zone",
+      "obrigatorio": false
+    },
+    {
+      "nome": "duracao_minutos",
+      "tipo": "integer",
+      "obrigatorio": false
+    },
+    {
+      "nome": "status",
+      "tipo": "character varying",
+      "obrigatorio": true
+    },
+    {
+      "nome": "observacoes",
+      "tipo": "text",
+      "obrigatorio": false
     },
     {
       "nome": "created_at",

@@ -780,4 +780,201 @@ begin
   perform pg_temp.checar('supervisor NÃO vê mensagens de conversa alheia', viu = 0);
 end $$;
 
+do $$ begin raise notice E'\n--- 11. Arquivador de documentos ---'; end $$;
+
+do $$
+declare n int;
+begin
+  select count(*) into n from pg_tables where schemaname = 'public'
+    and tablename in ('regras_arquivamento', 'pastas_drive', 'propostas_arquivamento');
+  perform pg_temp.checar('as 3 tabelas do arquivador foram criadas', n = 3);
+end $$;
+
+-- Contagem exata por escopo: 6 internos + 3 fixos + 8 mensais + 12 de projeto.
+do $$
+declare
+  internos int; fixos int; mensais int; projetos int;
+begin
+  select count(*) into internos  from public.regras_arquivamento where escopo = 'interno'  and ativo;
+  select count(*) into fixos     from public.regras_arquivamento where escopo = 'fixo'     and ativo;
+  select count(*) into mensais   from public.regras_arquivamento where escopo = 'mensal'   and ativo;
+  select count(*) into projetos  from public.regras_arquivamento where escopo = 'projeto'  and ativo;
+
+  perform pg_temp.checar('6 regras internas', internos = 6);
+  perform pg_temp.checar('3 regras de documento fixo', fixos = 3);
+  perform pg_temp.checar('8 categorias mensais', mensais = 8);
+  perform pg_temp.checar('12 regras de projeto (4 projetos x 3 subcategorias)', projetos = 12);
+end $$;
+
+-- Os 4 projetos previstos estão cadastrados.
+do $$
+declare faltando text[];
+begin
+  select array_agg(p) into faltando
+  from unnest(array['REPORTING_MENSAL','CONFERENCIA_DE_RECEBIMENTOS',
+                    'CONFERENCIA_DE_CARTOES','REVISAO_DE_DRE']) p
+  where not exists (select 1 from public.regras_arquivamento where projeto = p and ativo);
+  perform pg_temp.checar('os 4 projetos previstos têm regra', faltando is null);
+end $$;
+
+-- Competência só no formato YYYY-MM: o modelo de caminho usa o placeholder.
+do $$
+declare n int;
+begin
+  select count(*) into n from public.regras_arquivamento
+   where escopo in ('mensal','projeto')
+     and not (caminho_modelo::text like '%{COMPETENCIA}%');
+  perform pg_temp.checar('toda regra mensal/projeto usa {COMPETENCIA} no caminho', n = 0);
+end $$;
+
+-- Cada escopo previsto tem regra.
+do $$
+declare faltando text[];
+begin
+  select array_agg(e) into faltando
+  from unnest(array['interno','fixo','mensal','projeto']) e
+  where not exists (select 1 from public.regras_arquivamento where escopo = e and ativo);
+  perform pg_temp.checar('há regra para os 4 escopos', faltando is null);
+end $$;
+
+-- Coerência: interno não exige empresa; mensal/projeto exigem competência.
+do $$
+declare erro boolean := false;
+begin
+  begin
+    insert into public.regras_arquivamento
+      (codigo, nome, escopo, caminho_modelo, padrao_nome, exige_empresa)
+    values ('X_INTERNO_RUIM', 'Interno exigindo empresa', 'interno',
+            '["00_INTERNO"]', '{TIPO_DOCUMENTO}.{EXTENSAO}', true);
+  exception when check_violation then erro := true;
+  end;
+  perform pg_temp.checar('regra interna NÃO pode exigir empresa', erro);
+end $$;
+
+do $$
+declare erro boolean := false;
+begin
+  begin
+    insert into public.regras_arquivamento
+      (codigo, nome, escopo, caminho_modelo, padrao_nome, exige_competencia)
+    values ('X_MENSAL_RUIM', 'Mensal sem competência', 'mensal',
+            '["01_DOCUMENTOS_MENSAIS"]', '{TIPO_DOCUMENTO}.{EXTENSAO}', false);
+  exception when check_violation then erro := true;
+  end;
+  perform pg_temp.checar('regra mensal DEVE exigir competência', erro);
+end $$;
+
+-- Idempotência das pastas: a mesma chave lógica não pode ter duas pastas.
+do $$
+declare erro boolean := false;
+begin
+  insert into public.pastas_drive
+    (escopo, chave_logica, external_id, nome, caminho_logico)
+  values ('estrutural', 'estrutural:00_INTERNO', 'drive-id-1', '00_INTERNO', '/00_INTERNO');
+
+  begin
+    insert into public.pastas_drive
+      (escopo, chave_logica, external_id, nome, caminho_logico)
+    values ('estrutural', 'estrutural:00_INTERNO', 'drive-id-2', '00_INTERNO', '/00_INTERNO');
+  exception when unique_violation then erro := true;
+  end;
+  perform pg_temp.checar('duas pastas para a mesma chave lógica é bloqueado', erro);
+end $$;
+
+do $$
+declare erro boolean := false;
+begin
+  begin
+    insert into public.pastas_drive
+      (escopo, chave_logica, external_id, nome, caminho_logico)
+    values ('estrutural', 'estrutural:OUTRA', 'drive-id-1', 'OUTRA', '/OUTRA');
+  exception when unique_violation then erro := true;
+  end;
+  perform pg_temp.checar('o mesmo item do Drive não é mapeado duas vezes', erro);
+end $$;
+
+-- Pasta de empresa exige a empresa.
+do $$
+declare erro boolean := false;
+begin
+  begin
+    insert into public.pastas_drive
+      (escopo, chave_logica, external_id, nome, caminho_logico)
+    values ('empresa', 'empresa:sem-dono', 'drive-id-3', 'X', '/X');
+  exception when check_violation then erro := true;
+  end;
+  perform pg_temp.checar('pasta de empresa exige empresa_id', erro);
+end $$;
+
+-- Versionamento: mesma empresa + mesmo caminho lógico + mesma versão é bloqueado.
+do $$
+declare erro boolean := false;
+begin
+  insert into public.documentos_operacionais
+    (empresa_id, nome_original, hash_sha256, caminho_logico, versao)
+  values ('22222222-2222-2222-2222-222222222222', 'relatorio.pdf',
+          repeat('b', 64), '/EMPRESA/2026/2026-09/RELATORIO', 1);
+
+  begin
+    insert into public.documentos_operacionais
+      (empresa_id, nome_original, hash_sha256, caminho_logico, versao)
+    values ('22222222-2222-2222-2222-222222222222', 'outro.pdf',
+            repeat('c', 64), '/EMPRESA/2026/2026-09/RELATORIO', 1);
+  exception when unique_violation then erro := true;
+  end;
+  perform pg_temp.checar('duas versões v1 do mesmo caminho lógico é bloqueado', erro);
+
+  -- v2 do mesmo caminho é permitido.
+  insert into public.documentos_operacionais
+    (empresa_id, nome_original, hash_sha256, caminho_logico, versao)
+  values ('22222222-2222-2222-2222-222222222222', 'relatorio.pdf',
+          repeat('d', 64), '/EMPRESA/2026/2026-09/RELATORIO', 2);
+  perform pg_temp.checar('nova versão do mesmo caminho é permitida', true);
+end $$;
+
+-- Proposta confirmada exige quem confirmou.
+do $$
+declare erro boolean := false;
+begin
+  begin
+    insert into public.propostas_arquivamento (usuario_id, status)
+    values ('11111111-1111-1111-1111-111111111111', 'confirmada');
+  exception when check_violation then erro := true;
+  end;
+  perform pg_temp.checar('proposta confirmada exige confirmada_por e data', erro);
+end $$;
+
+-- pastas_drive é backend-only.
+do $$
+declare n int;
+begin
+  select count(*) into n
+  from information_schema.role_table_grants
+  where grantee = 'authenticated' and table_schema = 'public' and table_name = 'pastas_drive';
+  perform pg_temp.checar('authenticated NÃO acessa pastas_drive (backend-only)', n = 0);
+end $$;
+
+-- Proposta é privada: nem supervisor lê a de outro.
+do $$
+declare
+  dono   constant uuid := '11111111-1111-1111-1111-111111111111';
+  outro  constant uuid := '33333333-3333-3333-3333-333333333333';
+  prop   uuid;
+  viu    int;
+begin
+  insert into public.propostas_arquivamento (usuario_id) values (dono) returning id into prop;
+
+  set local role authenticated;
+  perform set_config('request.jwt.claim.sub', outro::text, true);
+  select count(*) into viu from public.propostas_arquivamento where id = prop;
+  reset role;
+  perform pg_temp.checar('supervisor NÃO vê proposta de arquivamento de outro', viu = 0);
+
+  set local role authenticated;
+  perform set_config('request.jwt.claim.sub', dono::text, true);
+  select count(*) into viu from public.propostas_arquivamento where id = prop;
+  reset role;
+  perform pg_temp.checar('o dono vê a própria proposta', viu = 1);
+end $$;
+
 do $$ begin raise notice E'\n=== TODOS OS TESTES PASSARAM ==='; end $$;
