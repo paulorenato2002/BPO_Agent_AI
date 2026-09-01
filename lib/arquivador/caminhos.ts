@@ -55,6 +55,15 @@ export type ContextoArquivamento = {
   empresaId?: string | null;
   empresaCodigo?: string | null;
   empresaNome?: string | null;
+  /**
+   * Nome do contêiner onde a pasta da empresa vive
+   * (01_CLIENTES_ATIVOS ou 02_CLIENTES_INATIVOS).
+   *
+   * Vem de `estrutura_fixa_drive`, escolhido pelo chamador conforme
+   * `empresas.ativo`. Não tem valor padrão de propósito: chutar "ativos"
+   * arquivaria documento de cliente inativo no lugar errado, em silêncio.
+   */
+  pastaClientes?: string | null;
   /** Competência no formato AAAA-MM. */
   competencia?: string | null;
   instituicao?: string | null;
@@ -115,6 +124,9 @@ function conferirExigencias(
   if (regra.exige_empresa) {
     if (!ctx.empresaId) faltando.push("empresaId");
     if (!ctx.empresaCodigo && !ctx.empresaNome) faltando.push("empresaCodigo");
+    // Sem o contêiner não dá para montar o caminho: a pasta da empresa cairia
+    // solta na raiz do Drive, ao lado de 00_INTERNO.
+    if (!ctx.pastaClientes) faltando.push("pastaClientes");
   }
 
   if (regra.exige_competencia && !ctx.competencia) faltando.push("competencia");
@@ -192,6 +204,29 @@ export function expandirDestino(
   let caminhoAcumulado = "";
 
   if (usaEmpresa) {
+    // 1º nível: o contêiner de clientes. A pasta de empresa NUNCA fica solta
+    // na raiz — lá em cima só existem 00_INTERNO e os dois contêineres.
+    const container = sanitizarNomeArquivo(ctx.pastaClientes ?? "").replace(/[/\\]/g, "_");
+    if (!container) {
+      return {
+        ok: false,
+        erro: "O contêiner de clientes ficou vazio após sanitização.",
+        faltando: ["pastaClientes"],
+      };
+    }
+
+    caminhoAcumulado = container;
+    segmentos.push({
+      nome: container,
+      escopo: "estrutural",
+      chaveLogica: `estrutural:${container}`,
+      caminhoLogico: caminhoAcumulado,
+    });
+
+    // 2º nível: a empresa. A chave é SÓ `empresa:<uuid>`, sem o contêiner —
+    // se o cliente vira inativo, o caminho desejado muda mas a chave não, e o
+    // resolvedor reencontra a pasta existente em vez de criar uma segunda.
+    // Mover a pasta é decisão humana, não efeito colateral de um upload.
     const nome = nomePastaEmpresa(ctx);
     if (!nome) {
       return {
@@ -200,7 +235,8 @@ export function expandirDestino(
         faltando: ["empresaCodigo"],
       };
     }
-    caminhoAcumulado = nome;
+
+    caminhoAcumulado = `${caminhoAcumulado}/${nome}`;
     segmentos.push({
       nome,
       escopo: "empresa",
@@ -268,6 +304,31 @@ export function expandirDestino(
     caminhoLogico: folha.caminhoLogico,
     chaveLogica: folha.chaveLogica,
   };
+}
+
+/**
+ * Constrói segmentos para um caminho ESTRUTURAL literal, sem placeholder.
+ *
+ * Usado pela estrutura fixa (00_INTERNO, contêineres de clientes). Gera as
+ * mesmas chaves que `expandirDestino` gera para regras internas, então a
+ * pasta criada pelo bootstrap é exatamente a mesma que o arquivamento
+ * reencontra depois — não são duas pastas com o mesmo nome.
+ */
+export function segmentosEstruturais(caminho: string[]): SegmentoDestino[] {
+  const segmentos: SegmentoDestino[] = [];
+  let chave = "estrutural";
+  let acumulado = "";
+
+  for (const bruto of caminho) {
+    const nome = sanitizarNomeArquivo(bruto).replace(/[/\\]/g, "_");
+    if (!nome) continue;
+
+    chave = `${chave}:${nome}`;
+    acumulado = acumulado ? `${acumulado}/${nome}` : nome;
+    segmentos.push({ nome, escopo: "estrutural", chaveLogica: chave, caminhoLogico: acumulado });
+  }
+
+  return segmentos;
 }
 
 /**

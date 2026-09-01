@@ -977,4 +977,85 @@ begin
   perform pg_temp.checar('o dono vê a própria proposta', viu = 1);
 end $$;
 
+-- ---------------------------------------------------------------------------
+-- Estrutura fixa do Drive
+-- ---------------------------------------------------------------------------
+
+do $$
+declare n int;
+begin
+  select count(*) into n from public.estrutura_fixa_drive where ativo;
+  perform pg_temp.checar('9 pastas fixas cadastradas', n = 9);
+
+  select count(*) into n
+  from public.estrutura_fixa_drive
+  where chave in ('clientes_ativos', 'clientes_inativos');
+  perform pg_temp.checar('os dois contêineres de cliente existem', n = 2);
+
+  select count(*) into n
+  from public.estrutura_fixa_drive
+  where caminho_modelo->>0 = '00_INTERNO';
+  perform pg_temp.checar('7 pastas sob 00_INTERNO (raiz + 6 subpastas)', n = 7);
+end $$;
+
+-- A estrutura fixa é criada ANTES de existir qualquer documento; se um
+-- placeholder passasse, o bootstrap criaria uma pasta chamada "{ANO}".
+do $$
+declare erro boolean := false;
+begin
+  begin
+    insert into public.estrutura_fixa_drive (chave, caminho_modelo)
+    values ('teste_placeholder', '["01_CLIENTES_ATIVOS","{ANO}"]');
+  exception when check_violation then erro := true;
+  end;
+  perform pg_temp.checar('caminho com placeholder é bloqueado na estrutura fixa', erro);
+end $$;
+
+do $$
+declare erro boolean := false;
+begin
+  begin
+    insert into public.estrutura_fixa_drive (chave, caminho_modelo)
+    values ('teste_vazio', '[]');
+  exception when check_violation then erro := true;
+  end;
+  perform pg_temp.checar('caminho vazio é bloqueado na estrutura fixa', erro);
+end $$;
+
+do $$
+declare erro boolean := false;
+begin
+  begin
+    insert into public.estrutura_fixa_drive (chave, caminho_modelo)
+    values ('clientes_ativos', '["99_OUTRA"]');
+  exception when unique_violation then erro := true;
+  end;
+  perform pg_temp.checar('chave duplicada na estrutura fixa é bloqueada', erro);
+end $$;
+
+-- Toda regra interna precisa ter a pasta correspondente na estrutura fixa —
+-- senão o bootstrap não a cria e o erro só aparece no primeiro arquivamento.
+do $$
+declare descobertas int;
+begin
+  select count(*) into descobertas
+  from public.regras_arquivamento r
+  where r.escopo = 'interno'
+    and r.ativo
+    and not exists (
+      select 1 from public.estrutura_fixa_drive e
+      where e.ativo and e.caminho_modelo = r.caminho_modelo
+    );
+  perform pg_temp.checar('toda regra interna tem pasta na estrutura fixa', descobertas = 0);
+end $$;
+
+do $$
+declare n int;
+begin
+  select count(*) into n
+  from information_schema.role_table_grants
+  where grantee = 'anon' and table_schema = 'public' and table_name = 'estrutura_fixa_drive';
+  perform pg_temp.checar('anon NÃO acessa estrutura_fixa_drive', n = 0);
+end $$;
+
 do $$ begin raise notice E'\n=== TODOS OS TESTES PASSARAM ==='; end $$;
