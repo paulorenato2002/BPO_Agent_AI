@@ -16,7 +16,8 @@
     "test:historico": "node scripts/testar-historico.mjs",
     "test:concorrencia": "bash scripts/testar-concorrencia-chats.sh",
     "drive:bootstrap": "node scripts/drive-bootstrap.mjs",
-    "drive:verificar": "node scripts/drive-verificar.mjs"
+    "drive:verificar": "node scripts/drive-verificar.mjs",
+    "verificar:arquivador": "node scripts/verificar-arquivador.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.5",
