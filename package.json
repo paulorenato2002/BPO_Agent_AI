@@ -17,7 +17,8 @@
     "test:concorrencia": "bash scripts/testar-concorrencia-chats.sh",
     "drive:bootstrap": "node scripts/drive-bootstrap.mjs",
     "drive:verificar": "node scripts/drive-verificar.mjs",
-    "verificar:arquivador": "node scripts/verificar-arquivador.mjs"
+    "verificar:arquivador": "node scripts/verificar-arquivador.mjs",
+    "drive:estrutura": "node --conditions=react-server --import tsx scripts/drive-estrutura.mts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.5",
