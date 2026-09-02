@@ -94,6 +94,40 @@ if (erroRegras) {
     semPlaceholder.map((r) => r.codigo).join(", "));
 }
 
+// 2b. Estrutura fixa do Drive.
+const { data: fixas, error: erroFixas } = await admin
+  .from("estrutura_fixa_drive")
+  .select("chave,caminho_modelo")
+  .eq("ativo", true);
+
+if (erroFixas) {
+  check(false, "leitura de estrutura_fixa_drive", erroFixas.message);
+} else {
+  check(fixas.length === 9, "9 pastas fixas cadastradas", `achei ${fixas.length}`);
+
+  const chaves = new Set(fixas.map((f) => f.chave));
+  for (const obrigatoria of ["clientes_ativos", "clientes_inativos", "interno_raiz"]) {
+    check(chaves.has(obrigatoria), `estrutura fixa "${obrigatoria}" existe`);
+  }
+
+  // Estrutura fixa é criada antes de existir competência: um {ANO} aqui
+  // viraria uma pasta chamada literalmente "{ANO}".
+  const comPlaceholder = fixas.filter((f) => JSON.stringify(f.caminho_modelo).includes("{"));
+  check(comPlaceholder.length === 0, "nenhuma pasta fixa usa placeholder",
+    comPlaceholder.map((f) => f.chave).join(", "));
+
+  // Toda regra interna precisa de pasta na estrutura fixa; senão o bootstrap
+  // não a cria e o erro só aparece no primeiro arquivamento.
+  if (!erroRegras) {
+    const caminhosFixos = new Set(fixas.map((f) => f.caminho_modelo.join("/")));
+    const descobertas = regras
+      .filter((r) => r.escopo === "interno")
+      .filter((r) => !caminhosFixos.has(r.caminho_modelo.join("/")));
+    check(descobertas.length === 0, "toda regra interna tem pasta na estrutura fixa",
+      descobertas.map((r) => r.codigo).join(", "));
+  }
+}
+
 // 3. As colunas de classificação entraram em documentos_operacionais.
 // Uma a uma: um select com tudo junto só reporta a PRIMEIRA coluna ausente,
 // escondendo as demais.
@@ -125,7 +159,12 @@ check(ausentes.length === 0,
   ausentes.length ? `faltam: ${ausentes.join(", ")}` : "");
 
 // 4. anon continua sem enxergar nada disso.
-for (const t of ["regras_arquivamento", "pastas_drive", "propostas_arquivamento"]) {
+for (const t of [
+  "regras_arquivamento",
+  "pastas_drive",
+  "propostas_arquivamento",
+  "estrutura_fixa_drive",
+]) {
   const { data, error } = await anon.from(t).select("*").limit(1);
   check(error !== null || (data ?? []).length === 0, `anon NÃO lê ${t}`,
     error ? "" : `retornou ${data.length} linha(s)`);
