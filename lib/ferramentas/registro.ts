@@ -1,5 +1,4 @@
 import "server-only";
-import { supabaseAdmin } from "../supabase-admin";
 import type {
   ContextoExecucao,
   DefinicaoFerramenta,
@@ -22,6 +21,17 @@ import type {
  * NESTA FASE nenhuma ferramenta de negócio está registrada. O registro existe
  * vazio, pronto para receber a primeira — ver docs/como_adicionar_nova_ferramenta.md.
  */
+
+/**
+ * Acesso ao banco, carregado sob demanda.
+ *
+ * `supabase-admin` valida credenciais na carga do modulo. Enumerar o catalogo
+ * de ferramentas nao deveria exigir isso — so a EXECUCAO fala com o Supabase.
+ */
+async function bd() {
+  const { supabaseAdmin } = await import("../supabase-admin");
+  return supabaseAdmin;
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type QualquerFerramenta = DefinicaoFerramenta<any, any>;
@@ -84,7 +94,7 @@ async function abrirExecucao(
   // Idempotência: se já existe execução concluída com a mesma chave, devolve a
   // anterior em vez de executar de novo.
   if (contexto.chaveIdempotencia) {
-    const { data } = await supabaseAdmin
+    const { data } = await (await bd())
       .from("execucoes_ferramenta")
       .select("id, status, saida")
       .eq("chave_idempotencia", contexto.chaveIdempotencia)
@@ -99,7 +109,7 @@ async function abrirExecucao(
     }
   }
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await (await bd())
     .from("execucoes_ferramenta")
     .insert({
       ferramenta_codigo: ferramenta.codigo,
@@ -123,7 +133,7 @@ async function atualizarExecucao(
   id: string,
   campos: Record<string, unknown>
 ): Promise<void> {
-  const { error } = await supabaseAdmin
+  const { error } = await (await bd())
     .from("execucoes_ferramenta")
     .update(campos)
     .eq("id", id);
@@ -147,7 +157,7 @@ export async function registrarEvento(evento: {
   dados?: Record<string, unknown>;
   origem?: "agente" | "aplicacao" | "usuario" | "sistema" | "integracao";
 }): Promise<void> {
-  const { error } = await supabaseAdmin.from("eventos_operacionais").insert({
+  const { error } = await (await bd()).from("eventos_operacionais").insert({
     tipo_evento: evento.tipoEvento,
     descricao: evento.descricao,
     severidade: evento.severidade ?? "info",
@@ -233,7 +243,7 @@ export async function executarFerramenta(
   // 3. Aprovação humana para ações sensíveis.
   if (ferramenta.exigeAprovacao) {
     await atualizarExecucao(execucao.id, { status: "aguardando_aprovacao" });
-    const { error } = await supabaseAdmin.from("aprovacoes_operacionais").insert({
+    const { error } = await (await bd()).from("aprovacoes_operacionais").insert({
       execucao_ferramenta_id: execucao.id,
       empresa_id: contexto.empresaId ?? null,
       acao: ferramenta.codigo,
