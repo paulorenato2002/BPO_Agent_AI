@@ -130,3 +130,48 @@ describe("catálogo", () => {
     assert.ok(t.function.parameters);
   });
 });
+
+describe("ferramenta arquivar_documentos", () => {
+  test("a descrição avisa que 'ok' não é confirmação de itens", async () => {
+    const { ferramentaArquivarDocumentos } = await import("../lib/ferramentas/arquivador");
+    const d = ferramentaArquivarDocumentos.descricao;
+    assert.match(d, /NÃO são confirmação/);
+    assert.match(d, /pergunte antes/);
+  });
+
+  test("é marcada como risco alto: sobe arquivo para o Drive do cliente", async () => {
+    const { ferramentaArquivarDocumentos } = await import("../lib/ferramentas/arquivador");
+    assert.equal(ferramentaArquivarDocumentos.nivelRisco, "alto");
+    assert.equal(ferramentaArquivarDocumentos.tentativas, 1, "retentativa é decisão humana");
+  });
+
+  test("confirmar precisa ser o booleano true — nada de aproximação", async () => {
+    const { ferramentaArquivarDocumentos } = await import("../lib/ferramentas/arquivador");
+    const v = ferramentaArquivarDocumentos.validarEntrada;
+
+    for (const valor of ["true", 1, "sim", "SIM", {}, null]) {
+      const r = v({ propostaId: "p1", confirmar: valor, anexosConfirmados: ["a1"] });
+      assert.equal(r.valido, false, `"${JSON.stringify(valor)}" não podia passar como confirmação`);
+    }
+
+    assert.equal(
+      v({ propostaId: "p1", confirmar: true, anexosConfirmados: ["a1"] }).valido,
+      true
+    );
+  });
+
+  test("recusa sem proposta ou sem anexos confirmados", async () => {
+    const { ferramentaArquivarDocumentos } = await import("../lib/ferramentas/arquivador");
+    const v = ferramentaArquivarDocumentos.validarEntrada;
+
+    assert.equal(v({ confirmar: true, anexosConfirmados: ["a1"] }).valido, false);
+    assert.equal(v({ propostaId: "p1", confirmar: true, anexosConfirmados: [] }).valido, false);
+  });
+
+  test("as duas ferramentas ficam no catálogo", async () => {
+    const { registrarFerramentasDeNegocio } = await import("../lib/ferramentas/catalogo");
+    const codigos = registrarFerramentasDeNegocio().listarParaAgente().map((f) => f.codigo);
+    assert.ok(codigos.includes("analisar_documentos"));
+    assert.ok(codigos.includes("arquivar_documentos"));
+  });
+});

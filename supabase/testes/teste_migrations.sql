@@ -1161,4 +1161,58 @@ begin
   perform pg_temp.checar('authenticated NÃO grava em anexos_agente', n = 0);
 end $$;
 
+-- ---------------------------------------------------------------------------
+-- Valores que o ARQUIVAMENTO grava
+--
+-- O código escrevia status 'arquivado' e 'confirmado'; nenhum dos dois existe
+-- nos CHECK, e isso só apareceria no primeiro arquivamento real. Estas
+-- asserções fixam os valores que o código usa de verdade.
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  empresa constant uuid := '22222222-2222-2222-2222-222222222222';
+  usuario constant uuid := '11111111-1111-1111-1111-111111111111';
+  doc     uuid;
+  erro    boolean := false;
+begin
+  insert into public.documentos_operacionais
+    (empresa_id, nome_original, nome_final, hash_sha256, caminho_logico, versao,
+     tipo_documento, extensao, mime_type, tamanho_bytes,
+     status, origem, confirmado_por, confirmado_em)
+  values (empresa, 'NF.pdf', 'ALF_2026-09_NOTA_FISCAL_v1.pdf', repeat('f', 64),
+          '01_CLIENTES_ATIVOS/ALF/05_NOTAS_FISCAIS', 1,
+          'NOTA_FISCAL', 'pdf', 'application/pdf', 2048,
+          'armazenado', 'agente', usuario, now())
+  returning id into doc;
+  perform pg_temp.checar('documento com status "armazenado" e origem "agente" é aceito', true);
+
+  insert into public.documento_localizacoes
+    (documento_id, provedor, bucket_ou_pasta, caminho, identificador_externo,
+     nome_utilizado, status, armazenado_em)
+  values (doc, 'google_drive', 'pasta-drive-x',
+          '01_CLIENTES_ATIVOS/ALF/05_NOTAS_FISCAIS/ALF_2026-09_NOTA_FISCAL_v1.pdf',
+          'drive-file-x', 'ALF_2026-09_NOTA_FISCAL_v1.pdf', 'armazenado', now());
+  perform pg_temp.checar('localização com status "armazenado" é aceita', true);
+
+  -- Status inventado continua sendo rejeitado.
+  begin
+    insert into public.documentos_operacionais
+      (empresa_id, nome_original, hash_sha256, status)
+    values (empresa, 'x.pdf', repeat('9', 64), 'status_que_nao_existe');
+  exception when check_violation then erro := true;
+  end;
+  perform pg_temp.checar('status inventado é rejeitado em documentos', erro);
+
+  -- Este era o bug real: o código gravava 'confirmado' em localizações.
+  erro := false;
+  begin
+    insert into public.documento_localizacoes
+      (documento_id, provedor, caminho, nome_utilizado, status)
+    values (doc, 'google_drive', '/x', 'x.pdf', 'confirmado');
+  exception when check_violation then erro := true;
+  end;
+  perform pg_temp.checar('status "confirmado" continua inválido em localizações', erro);
+end $$;
+
 do $$ begin raise notice E'\n=== TODOS OS TESTES PASSARAM ==='; end $$;

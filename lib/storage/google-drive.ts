@@ -241,6 +241,100 @@ export class GoogleDriveAdapter implements AdapterArmazenamento {
     return paiId;
   }
 
+  /**
+   * Envia um arquivo para uma pasta JÁ RESOLVIDA, pelo id dela.
+   *
+   * `enviar()` recebe um caminho e cria as pastas pelo caminho ingênuo
+   * (procura, não achou, cria), que produz pastas irmãs duplicadas sob
+   * concorrência. O arquivador resolve a pasta antes, pelo resolvedor
+   * idempotente, e entrega o id aqui — por isso este método existe.
+   *
+   * Nunca sobrescreve. Se já houver arquivo com o mesmo nome na pasta,
+   * devolve o id do existente com `jaExistia: true`, para o chamador decidir
+   * se é retentativa (idempotente) ou colisão de verdade.
+   */
+  async enviarNaPasta(params: {
+    paiId: string;
+    nome: string;
+    conteudo: Buffer;
+    mimeType: string;
+  }): Promise<
+    | { ok: true; identificadorExterno: string; jaExistia: boolean; confirmadoEm: Date }
+    | { ok: false; erro: string; naoConfigurado?: boolean }
+  > {
+    const cred = lerCredenciais();
+    if ("faltando" in cred) {
+      return {
+        ok: false,
+        naoConfigurado: true,
+        erro: `Google Drive não configurado. Faltam: ${cred.faltando.join(", ")}.`,
+      };
+    }
+
+    try {
+      const q = [
+        `name = '${escaparQuery(params.nome)}'`,
+        `'${escaparQuery(params.paiId)}' in parents`,
+        "trashed = false",
+      ].join(" and ");
+
+      const busca = await this.requisitar(
+        cred,
+        `${URL_API}/files?q=${encodeURIComponent(q)}&fields=files(id,name)` +
+          `&supportsAllDrives=true&includeItemsFromAllDrives=true`
+      );
+
+      if (busca.ok) {
+        const dados = (await busca.json()) as { files?: { id: string }[] };
+        const existente = dados.files?.[0];
+        if (existente) {
+          return {
+            ok: true,
+            identificadorExterno: existente.id,
+            jaExistia: true,
+            confirmadoEm: new Date(),
+          };
+        }
+      }
+
+      // Upload multipart: metadados + conteúdo numa requisição só.
+      const limite = `limite_${Date.now().toString(36)}`;
+      const metadados = JSON.stringify({ name: params.nome, parents: [params.paiId] });
+      const corpo = Buffer.concat([
+        Buffer.from(
+          `--${limite}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadados}\r\n` +
+            `--${limite}\r\nContent-Type: ${params.mimeType}\r\n\r\n`
+        ),
+        params.conteudo,
+        Buffer.from(`\r\n--${limite}--\r\n`),
+      ]);
+
+      const resposta = await this.requisitar(
+        cred,
+        `${URL_UPLOAD}/files?uploadType=multipart&supportsAllDrives=true&fields=id,name`,
+        {
+          method: "POST",
+          headers: { "Content-Type": `multipart/related; boundary=${limite}` },
+          body: new Uint8Array(corpo),
+        }
+      );
+
+      if (!resposta.ok) {
+        return { ok: false, erro: `Falha no upload para o Google Drive (HTTP ${resposta.status}).` };
+      }
+
+      const dados = (await resposta.json()) as { id: string };
+      return {
+        ok: true,
+        identificadorExterno: dados.id,
+        jaExistia: false,
+        confirmadoEm: new Date(),
+      };
+    } catch (e) {
+      return { ok: false, erro: mensagemErro(e) };
+    }
+  }
+
   async enviar(params: ParametrosEnvio): Promise<ResultadoEnvio> {
     const cred = lerCredenciais();
     if ("faltando" in cred) {
