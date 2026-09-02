@@ -1058,4 +1058,107 @@ begin
   perform pg_temp.checar('anon NÃO acessa estrutura_fixa_drive', n = 0);
 end $$;
 
+-- ---------------------------------------------------------------------------
+-- Anexos do agente
+-- ---------------------------------------------------------------------------
+
+do $$
+declare
+  dono  constant uuid := '11111111-1111-1111-1111-111111111111';
+  erro  boolean := false;
+begin
+  insert into public.anexos_agente
+    (arquivo_id, usuario_id, nome_original, extensao, tamanho_bytes, hash_sha256)
+  values (gen_random_uuid(), dono, 'notas.xlsx', 'xlsx', 1024, repeat('a', 64));
+  perform pg_temp.checar('anexo válido é aceito', true);
+
+  -- Hash tem que ser SHA-256 em hex; qualquer outra coisa é dado corrompido.
+  begin
+    insert into public.anexos_agente
+      (arquivo_id, usuario_id, nome_original, extensao, tamanho_bytes, hash_sha256)
+    values (gen_random_uuid(), dono, 'x.txt', 'txt', 10, 'hash-invalido');
+  exception when check_violation then erro := true;
+  end;
+  perform pg_temp.checar('hash fora do formato SHA-256 é bloqueado', erro);
+
+  erro := false;
+  begin
+    insert into public.anexos_agente
+      (arquivo_id, usuario_id, nome_original, extensao, tamanho_bytes, hash_sha256, bloqueado)
+    values (gen_random_uuid(), dono, 'cert.pfx', 'pfx', 10, repeat('b', 64), true);
+  exception when check_violation then erro := true;
+  end;
+  perform pg_temp.checar('bloqueio sem motivo é rejeitado', erro);
+
+  erro := false;
+  begin
+    insert into public.anexos_agente
+      (arquivo_id, usuario_id, nome_original, extensao, tamanho_bytes, hash_sha256)
+    values (gen_random_uuid(), dono, 'vazio.txt', 'txt', 0, repeat('c', 64));
+  exception when check_violation then erro := true;
+  end;
+  perform pg_temp.checar('arquivo de tamanho zero é rejeitado', erro);
+end $$;
+
+-- O mesmo arquivo do Storage não pode ser registrado duas vezes.
+do $$
+declare
+  dono constant uuid := '11111111-1111-1111-1111-111111111111';
+  aid  constant uuid := gen_random_uuid();
+  erro boolean := false;
+begin
+  insert into public.anexos_agente
+    (arquivo_id, usuario_id, nome_original, extensao, tamanho_bytes, hash_sha256)
+  values (aid, dono, 'a.txt', 'txt', 10, repeat('d', 64));
+
+  begin
+    insert into public.anexos_agente
+      (arquivo_id, usuario_id, nome_original, extensao, tamanho_bytes, hash_sha256)
+    values (aid, dono, 'a.txt', 'txt', 10, repeat('d', 64));
+  exception when unique_violation then erro := true;
+  end;
+  perform pg_temp.checar('mesmo arquivo_id não é registrado duas vezes', erro);
+end $$;
+
+-- Anexo é privado do dono — nem papel superior lê o alheio.
+do $$
+declare
+  dono   constant uuid := '11111111-1111-1111-1111-111111111111';
+  outro  constant uuid := '33333333-3333-3333-3333-333333333333';
+  aid    constant uuid := gen_random_uuid();
+  viu    int;
+begin
+  insert into public.anexos_agente
+    (arquivo_id, usuario_id, nome_original, extensao, tamanho_bytes, hash_sha256)
+  values (aid, dono, 'privado.xlsx', 'xlsx', 99, repeat('e', 64));
+
+  set local role authenticated;
+  perform set_config('request.jwt.claim.sub', outro::text, true);
+  select count(*) into viu from public.anexos_agente where arquivo_id = aid;
+  reset role;
+  perform pg_temp.checar('supervisor NÃO vê anexo de outro usuário', viu = 0);
+
+  set local role authenticated;
+  perform set_config('request.jwt.claim.sub', dono::text, true);
+  select count(*) into viu from public.anexos_agente where arquivo_id = aid;
+  reset role;
+  perform pg_temp.checar('o dono vê o próprio anexo', viu = 1);
+end $$;
+
+do $$
+declare n int;
+begin
+  select count(*) into n
+  from information_schema.role_table_grants
+  where grantee = 'anon' and table_schema = 'public' and table_name = 'anexos_agente';
+  perform pg_temp.checar('anon NÃO acessa anexos_agente', n = 0);
+
+  -- Gravar anexo é do backend. authenticated só lê.
+  select count(*) into n
+  from information_schema.role_table_grants
+  where grantee = 'authenticated' and table_schema = 'public'
+    and table_name = 'anexos_agente' and privilege_type in ('INSERT', 'UPDATE', 'DELETE');
+  perform pg_temp.checar('authenticated NÃO grava em anexos_agente', n = 0);
+end $$;
+
 do $$ begin raise notice E'\n=== TODOS OS TESTES PASSARAM ==='; end $$;
