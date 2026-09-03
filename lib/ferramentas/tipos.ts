@@ -15,6 +15,15 @@ export type ModoExecucao = "sincrono" | "assincrono";
 /** Contexto de quem está executando. Nunca contém segredos. */
 export type ContextoExecucao = {
   usuarioId: string | null;
+  /**
+   * Conversa e mensagem em que a ferramenta foi chamada.
+   *
+   * Vêm do SERVIDOR, nunca do modelo: ele não tem como saber esses ids, e
+   * deixá-lo informar seria abrir caminho para uma ferramenta agir sobre a
+   * conversa de outra pessoa.
+   */
+  conversaId?: string | null;
+  mensagemId?: string | null;
   empresaId?: string | null;
   competenciaId?: string | null;
   tarefaOperacionalId?: string | null;

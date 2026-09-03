@@ -362,6 +362,11 @@ def cmd_json(args, dados: dict) -> int:
         "ok": resultado.status != "erro",
         "status": resultado.status,
         "caminho_final": resultado.caminho_final,
+        # Caminho da PASTA relativo à raiz. Quem chama (o agente) precisa
+        # registrar isso no banco, e a raiz é configuração de máquina: se o
+        # caminho absoluto fosse gravado, mudar de computador quebraria o
+        # histórico inteiro.
+        "caminho_relativo": destino.caminho_relativo,
         "nome_final": resultado.nome_final,
         "versao": resultado.versao,
         "sha256": resultado.sha256,

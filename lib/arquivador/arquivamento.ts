@@ -1,5 +1,4 @@
 import { propostaAindaValida, propostaExpirada, type ItemAnalisado } from "./analise";
-import type { SegmentoDestino } from "./caminhos";
 
 /**
  * Confirmação de uma proposta e arquivamento efetivo no Drive.
@@ -59,19 +58,36 @@ export type PortasArquivamento = {
   lerConteudoParaEnvio(
     anexoId: string
   ): Promise<{ conteudo: Buffer; mimeType: string; nomeOriginal: string; extensao: string }>;
-  /** Segmentos da árvore de destino, já expandidos a partir da regra. */
-  segmentosDoItem(item: ItemAnalisado): Promise<SegmentoDestino[] | null>;
-  resolverPasta(
-    segmentos: SegmentoDestino[],
-    empresaId: string | null
-  ): Promise<{ ok: true; externalId: string } | { ok: false; erro: string }>;
-  enviarArquivo(params: {
-    paiId: string;
-    nome: string;
+  /**
+   * Coloca o arquivo no destino final e devolve onde ele ficou.
+   *
+   * É UMA porta só, e não "resolve pasta" + "envia", porque os dois destinos
+   * possíveis trabalham de jeitos diferentes: no Drive é preciso resolver a
+   * árvore de pastas por id antes de subir; na pasta sincronizada do OneDrive
+   * o mini-sistema em Python faz caminho, nome, versão e cópia numa tacada.
+   * Espremer os dois no mesmo formato deixaria metade da interface vazia de um
+   * lado ou do outro.
+   *
+   * `jaExistia` = o arquivo já estava lá com o mesmo conteúdo. É retentativa,
+   * não erro.
+   */
+  entregarArquivo(dados: {
+    item: ItemAnalisado;
     conteudo: Buffer;
     mimeType: string;
+    nomeOriginal: string;
+    extensao: string;
   }): Promise<
-    | { ok: true; identificadorExterno: string; jaExistia: boolean }
+    | {
+        ok: true;
+        identificador: string;
+        caminhoLogico: string;
+        nomeFinal: string;
+        versao: number;
+        jaExistia: boolean;
+        /** Quem entregou sabe onde ficou; o registro não adivinha. */
+        provedor: string;
+      }
     | { ok: false; erro: string }
   >;
   /** Documento já arquivado com este conteúdo para esta empresa, se houver. */
@@ -79,8 +95,6 @@ export type PortasArquivamento = {
     empresaId: string,
     hash: string
   ): Promise<{ id: string; identificadorExterno: string | null; caminho: string | null } | null>;
-  /** Próxima versão livre para um caminho lógico dentro da empresa. */
-  proximaVersao(empresaId: string, caminhoLogico: string): Promise<number>;
   registrarDocumento(dados: {
     propostaId: string;
     item: ItemAnalisado;
@@ -89,7 +103,8 @@ export type PortasArquivamento = {
     caminhoLogico: string;
     nomeFinal: string;
     identificadorExterno: string;
-    pastaExternalId: string;
+    /** Onde o arquivo ficou: google_drive | pasta_sincronizada. */
+    provedor: string;
     mimeType: string;
     tamanhoBytes: number;
     confirmadoPor: string;
@@ -257,43 +272,28 @@ export async function arquivarDocumentos(
         }
       }
 
-      const segmentos = await portas.segmentosDoItem(item);
-      if (!segmentos || segmentos.length === 0) {
-        throw new Error("Não foi possível recalcular o destino a partir da regra.");
-      }
-
-      const pasta = await portas.resolverPasta(segmentos, empresaId);
-      if (!pasta.ok) throw new Error(pasta.erro);
-
       const arquivo = await portas.lerConteudoParaEnvio(item.anexoId);
 
-      // A versão é decidida agora, não na análise: outro documento pode ter
-      // ocupado a v1 entre analisar e confirmar.
-      const caminhoPasta = segmentos[segmentos.length - 1].caminhoLogico;
-      const versao = empresaId ? await portas.proximaVersao(empresaId, caminhoPasta) : 1;
-
-      const nomeFinal =
-        versao === 1
-          ? item.nomeSugerido!
-          : item.nomeSugerido!.replace(/_v\d+(\.[^.]+)$/, `_v${versao}$1`);
-
-      const envio = await portas.enviarArquivo({
-        paiId: pasta.externalId,
-        nome: nomeFinal,
+      // A versão só é decidida AGORA, dentro da entrega: outro documento pode
+      // ter ocupado a v1 entre analisar e confirmar.
+      const entrega = await portas.entregarArquivo({
+        item,
         conteudo: arquivo.conteudo,
         mimeType: arquivo.mimeType,
+        nomeOriginal: arquivo.nomeOriginal,
+        extensao: arquivo.extensao,
       });
-      if (!envio.ok) throw new Error(envio.erro);
+      if (!entrega.ok) throw new Error(entrega.erro);
 
       const registro = await portas.registrarDocumento({
         propostaId: proposta.id,
         item,
         hash,
-        versao,
-        caminhoLogico: caminhoPasta,
-        nomeFinal,
-        identificadorExterno: envio.identificadorExterno,
-        pastaExternalId: pasta.externalId,
+        versao: entrega.versao,
+        caminhoLogico: entrega.caminhoLogico,
+        nomeFinal: entrega.nomeFinal,
+        identificadorExterno: entrega.identificador,
+        provedor: entrega.provedor,
         mimeType: arquivo.mimeType,
         tamanhoBytes: arquivo.conteudo.length,
         confirmadoPor: usuarioId,
@@ -302,12 +302,12 @@ export async function arquivarDocumentos(
       resultados.push({
         anexoId: item.anexoId,
         // `jaExistia` significa que o arquivo já estava lá: quase sempre uma
-        // retentativa depois de o upload ter dado certo e o registro falhado.
-        status: envio.jaExistia ? "ja_arquivado" : "arquivado",
+        // retentativa depois de a cópia ter dado certo e o registro falhado.
+        status: entrega.jaExistia ? "ja_arquivado" : "arquivado",
         documentoId: registro.documentoId,
-        identificadorExterno: envio.identificadorExterno,
-        caminhoFinal: `${caminhoPasta}/${nomeFinal}`,
-        versao,
+        identificadorExterno: entrega.identificador,
+        caminhoFinal: `${entrega.caminhoLogico}/${entrega.nomeFinal}`,
+        versao: entrega.versao,
         erro: null,
       });
     } catch (e) {

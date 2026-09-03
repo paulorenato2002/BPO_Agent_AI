@@ -106,8 +106,6 @@ export const ferramentaAnalisarDocumentos: DefinicaoFerramenta<
         items: { type: "string" },
         description: "ids dos anexos (campo anexoId do bloco do arquivo anexado).",
       },
-      conversaId: { type: "string", description: "Conversa atual, quando conhecida." },
-      mensagemId: { type: "string", description: "Mensagem que trouxe os anexos." },
       empresaContextoId: {
         type: "string",
         description:
@@ -140,8 +138,9 @@ export const ferramentaAnalisarDocumentos: DefinicaoFerramenta<
 
     const pedido: EntradaAnalise = {
       anexoIds: entrada.anexoIds,
-      conversaId: entrada.conversaId ?? null,
-      mensagemId: entrada.mensagemId ?? null,
+      // O servidor manda. O que o modelo mandou fica só como reserva.
+      conversaId: contexto.conversaId ?? entrada.conversaId ?? null,
+      mensagemId: contexto.mensagemId ?? entrada.mensagemId ?? null,
       empresaContextoId: entrada.empresaContextoId ?? contexto.empresaId ?? null,
       chaveIdempotencia: contexto.chaveIdempotencia ?? null,
     };
@@ -246,9 +245,9 @@ export const ferramentaArquivarDocumentos: DefinicaoFerramenta<
     }
 
     const { arquivarDocumentos } = await import("../arquivador/arquivamento");
-    const { portasArquivamentoPadrao } = await import("../arquivador/portas-arquivamento");
+    const { portasArquivamentoEmUso } = await import("../arquivador/portas-arquivamento-local");
 
-    const r = await arquivarDocumentos(entrada, contexto.usuarioId, portasArquivamentoPadrao());
+    const r = await arquivarDocumentos(entrada, contexto.usuarioId, await portasArquivamentoEmUso());
     if (!r.ok) return { ok: false, erro: r.erro, codigoErro: r.codigo };
 
     const { resumo } = r;

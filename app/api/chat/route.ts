@@ -5,6 +5,9 @@ import type {
 import { openai, CHAT_MODEL, REASONING_EFFORT } from "@/lib/openai-client";
 import { dbTools, executeDbTool } from "@/lib/db-tools";
 import { fileTools, executeFileTool } from "@/lib/file-tools";
+import { registrarFerramentasDeNegocio } from "@/lib/ferramentas/catalogo";
+import { executarFerramenta } from "@/lib/ferramentas/registro";
+import type { ContextoExecucao } from "@/lib/ferramentas/tipos";
 import { usuarioAtual } from "@/lib/auth/usuario";
 import {
   conversaPertenceAoUsuario,
@@ -15,10 +18,27 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const TOOLS = [...dbTools, ...fileTools];
+// As ferramentas de negocio (arquivador) vivem no registro, que valida
+// entrada, exige contexto de usuario e grava a execucao. As de banco e de
+// arquivo sao anteriores a ele e continuam com o despacho proprio.
+const registro = registrarFerramentasDeNegocio();
+const ferramentasDeNegocio = registro.comoToolsOpenAI();
+const NOMES_NEGOCIO = new Set(ferramentasDeNegocio.map((t) => t.function.name));
+
+const TOOLS = [...dbTools, ...fileTools, ...ferramentasDeNegocio];
 const NOMES_FILE_TOOLS = new Set(fileTools.map((t) => t.function.name));
 
-async function executeTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+async function executeTool(
+  name: string,
+  args: Record<string, unknown>,
+  contexto: ContextoExecucao
+): Promise<unknown> {
+  if (NOMES_NEGOCIO.has(name)) {
+    // O registro devolve { ok, saida, resumo } — o modelo le esse objeto
+    // inteiro, entao o resumo em texto vai junto de proposito: e o que ele
+    // usa para contar ao usuario sem inventar.
+    return executarFerramenta(name, args, contexto);
+  }
   return NOMES_FILE_TOOLS.has(name) ? executeFileTool(name, args) : executeDbTool(name, args);
 }
 
@@ -40,6 +60,26 @@ Regras:
 - Antes de chamar deletar_dado, explique o que vai ser apagado e peça confirmação
   explícita do usuário na conversa. Só chame a tool depois que o usuário confirmar.
 - Responda sempre em português, de forma direta.
+
+Arquivar documentos na pasta da empresa:
+- Quando o usuário anexar documentos e pedir para ARQUIVAR, organizar, guardar
+  ou salvar na pasta, use analisar_documentos passando o anexoId que veio no
+  bloco do arquivo (campo "anexoId", não confunda com "arquivoId").
+- analisar_documentos NÃO arquiva nada. Ela devolve uma PROPOSTA. Mostre ao
+  usuário, para cada arquivo: a empresa identificada, a competência, o destino
+  e as evidências (por que você concluiu aquilo). Se vier campo faltando ou
+  conflito, pergunte — não escolha por conta própria.
+- Cada arquivo é analisado sozinho. Um lote pode ter empresas diferentes, e
+  isso precisa aparecer na sua resposta.
+- Só chame arquivar_documentos DEPOIS que o usuário disser claramente quais
+  arquivos quer arquivar. "ok", "pode", "isso", "beleza" ou silêncio NÃO são
+  confirmação de itens específicos: se houver qualquer dúvida sobre QUAIS
+  arquivos, pergunte antes. Arquivar é irreversível na prática.
+- Ao chamar arquivar_documentos, passe o propostaId, confirmar=true e a lista
+  exata dos anexoIds que o usuário confirmou. Item fora da lista não é
+  arquivado.
+- Depois, conte o que aconteceu com cada arquivo: onde ficou, se já existia,
+  ou por que falhou. Não diga que arquivou algo que voltou com erro.
 
 Arquivos anexados:
 - Quando a mensagem do usuário contiver um ou mais blocos "[Arquivo anexado pelo usuário:
@@ -76,6 +116,8 @@ const STATUS_POR_TOOL: Record<string, string> = {
   consultar_arquivo_anexado: "Lendo arquivo anexado...",
   agregar_arquivo_anexado: "Somarizando arquivo anexado...",
   ler_arquivo_texto_anexado: "Lendo arquivo anexado...",
+  analisar_documentos: "Analisando os documentos...",
+  arquivar_documentos: "Arquivando na pasta...",
 };
 
 type AccTool = { id: string; function: { name: string; arguments: string } };
@@ -227,7 +269,14 @@ export async function POST(request: Request) {
             let result: unknown;
             try {
               const args = JSON.parse(call.function.arguments || "{}");
-              result = await executeTool(call.function.name, args);
+              result = await executeTool(call.function.name, args, {
+                usuarioId: usuario.id,
+                // Só entra no contexto se a conversa for mesmo do usuário:
+                // `persistir` já carrega essa checagem.
+                conversaId: persistir ? conversaId : null,
+                mensagemId: mensagemAgenteId,
+                chaveIdempotencia: null,
+              });
             } catch (err) {
               result = { erro: err instanceof Error ? err.message : String(err) };
             }

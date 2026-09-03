@@ -1213,6 +1213,24 @@ begin
   exception when check_violation then erro := true;
   end;
   perform pg_temp.checar('status "confirmado" continua inválido em localizações', erro);
+
+  -- A rota nova escreve em pasta sincronizada do OneDrive. Sem esse valor, o
+  -- registro diria "google_drive" para arquivo que está em outro lugar.
+  insert into public.documento_localizacoes
+    (documento_id, provedor, caminho, nome_utilizado, status, armazenado_em)
+  values (doc, 'pasta_sincronizada',
+          '01_CLIENTES_ATIVOS/ALF/05_NOTAS_FISCAIS/x_v1.pdf', 'x_v1.pdf',
+          'armazenado', now());
+  perform pg_temp.checar('provedor "pasta_sincronizada" é aceito', true);
+
+  erro := false;
+  begin
+    insert into public.documento_localizacoes
+      (documento_id, provedor, caminho, nome_utilizado, status)
+    values (doc, 'provedor_inventado', '/x', 'x.pdf', 'pendente');
+  exception when check_violation then erro := true;
+  end;
+  perform pg_temp.checar('provedor inventado continua sendo rejeitado', erro);
 end $$;
 
 do $$ begin raise notice E'\n=== TODOS OS TESTES PASSARAM ==='; end $$;

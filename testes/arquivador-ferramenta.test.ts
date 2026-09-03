@@ -32,12 +32,19 @@ describe("contrato exposto ao modelo", () => {
     for (const proibido of ["caminho", "pasta", "driveId", "externalId", "destino"]) {
       assert.ok(!props.includes(proibido), `o modelo não pode informar "${proibido}"`);
     }
-    assert.deepEqual(props.sort(), [
-      "anexoIds",
-      "conversaId",
-      "empresaContextoId",
-      "mensagemId",
-    ]);
+    assert.deepEqual(props.sort(), ["anexoIds", "empresaContextoId"]);
+  });
+
+  test("o modelo não informa conversa nem mensagem", () => {
+    // Esses ids vêm do SERVIDOR. Deixar o modelo informá-los abriria caminho
+    // para uma ferramenta agir sobre a conversa de outra pessoa — e ele nem
+    // teria como saber o id certo.
+    const props = Object.keys(
+      (ferramentaAnalisarDocumentos.schemaEntrada.properties ?? {}) as object
+    );
+    assert.ok(!props.includes("conversaId"));
+    assert.ok(!props.includes("mensagemId"));
+    assert.ok(!props.includes("usuarioId"));
   });
 });
 

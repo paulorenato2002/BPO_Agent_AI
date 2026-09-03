@@ -108,28 +108,32 @@ function montar(opcoes: {
         extensao: "pdf",
       };
     },
-    async segmentosDoItem() {
-      return SEGMENTOS;
-    },
-    async resolverPasta() {
-      return falhaPasta
-        ? { ok: false as const, erro: falhaPasta }
-        : { ok: true as const, externalId: "pasta-drive-1" };
-    },
-    async enviarArquivo(params) {
+    async entregarArquivo(dados) {
+      // Uma porta só cobre "resolver destino" e "entregar": os dois destinos
+      // reais (Drive e pasta sincronizada) fazem isso de jeitos diferentes.
+      if (falhaPasta) return { ok: false as const, erro: falhaPasta };
       if (falhaEnvio) return { ok: false as const, erro: falhaEnvio };
-      enviados.push({ nome: params.nome, paiId: params.paiId });
+
+      const versao = versaoInicial;
+      const nomeFinal =
+        versao === 1
+          ? dados.item.nomeSugerido!
+          : dados.item.nomeSugerido!.replace(/_v\d+(\.[^.]+)$/, `_v${versao}$1`);
+
+      enviados.push({ nome: nomeFinal, paiId: "pasta-destino" });
+
       return {
         ok: true as const,
-        identificadorExterno: `drv-${enviados.length}`,
+        identificador: `dest-${enviados.length}`,
+        caminhoLogico: SEGMENTOS[SEGMENTOS.length - 1].caminhoLogico,
+        nomeFinal,
+        versao,
         jaExistia: jaExistiaNoDrive,
+        provedor: "pasta_sincronizada",
       };
     },
     async documentoPorHash() {
       return documentoExistente;
-    },
-    async proximaVersao() {
-      return versaoInicial;
     },
     async registrarDocumento(dados) {
       registrados.push({ versao: dados.versao, nomeFinal: dados.nomeFinal });
@@ -331,7 +335,7 @@ describe("caminho feliz", () => {
     assert.equal(r.itens[0].status, "arquivado");
     assert.equal(r.itens[0].documentoId, "doc-1");
     assert.equal(r.statusProposta, "arquivada");
-    assert.equal(c.enviados[0].paiId, "pasta-drive-1", "subiu na pasta resolvida");
+    assert.equal(c.enviados[0].paiId, "pasta-destino", "entregou no destino resolvido");
     assert.equal(c.propostaAtualizada?.status, "arquivada");
   });
 
@@ -393,11 +397,19 @@ describe("falha parcial", () => {
     const c = montar({
       proposta: proposta({ itens: [item({ anexoId: "a1" }), item({ anexoId: "a2" })] }),
     });
-    c.portas.enviarArquivo = async (params) => {
+    c.portas.entregarArquivo = async (dados) => {
       chamada++;
       if (chamada === 2) return { ok: false as const, erro: "HTTP 500 quota" };
-      c.enviados.push({ nome: params.nome, paiId: params.paiId });
-      return { ok: true as const, identificadorExterno: "drv-1", jaExistia: false };
+      c.enviados.push({ nome: dados.item.nomeSugerido!, paiId: "pasta-destino" });
+      return {
+        ok: true as const,
+        identificador: "dest-1",
+        caminhoLogico: "01_CLIENTES_ATIVOS/ALF/05_NOTAS_FISCAIS",
+        nomeFinal: dados.item.nomeSugerido!,
+        versao: 1,
+        jaExistia: false,
+        provedor: "pasta_sincronizada",
+      };
     };
 
     const r = await arquivarDocumentos(
@@ -413,7 +425,7 @@ describe("falha parcial", () => {
     assert.match(c.propostaAtualizada?.erroMensagem ?? "", /quota/);
   });
 
-  test("falha ao resolver a pasta não deixa arquivo órfão no Drive", async () => {
+  test("falha ao resolver o destino não deixa arquivo órfão", async () => {
     const c = montar({ falhaPasta: "Drive indisponível" });
     const r = await arquivarDocumentos(
       { propostaId: "prop-1", confirmar: true, anexosConfirmados: ["anx-1"] },
@@ -423,7 +435,7 @@ describe("falha parcial", () => {
 
     assert.ok(r.ok);
     assert.equal(r.itens[0].status, "erro");
-    assert.equal(c.enviados.length, 0, "não podia enviar sem pasta resolvida");
+    assert.equal(c.enviados.length, 0, "não podia entregar sem destino resolvido");
     assert.equal(c.registrados.length, 0, "nem registrar");
   });
 

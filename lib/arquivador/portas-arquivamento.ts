@@ -203,7 +203,6 @@ async function documentoPorHash(empresaId: string, hash: string) {
     .from("documento_localizacoes")
     .select("identificador_externo")
     .eq("documento_id", doc.id)
-    .eq("provedor", "google_drive")
     .limit(1)
     .maybeSingle();
 
@@ -223,7 +222,7 @@ async function registrarDocumento(dados: {
   caminhoLogico: string;
   nomeFinal: string;
   identificadorExterno: string;
-  pastaExternalId: string;
+  provedor: string;
   mimeType: string;
   tamanhoBytes: number;
   confirmadoPor: string;
@@ -274,8 +273,10 @@ async function registrarDocumento(dados: {
 
   const { error: erroLoc } = await supabaseAdmin.from("documento_localizacoes").insert({
     documento_id: documentoId,
-    provedor: "google_drive",
-    bucket_ou_pasta: dados.pastaExternalId,
+    // O provedor vem de quem entregou. Fixar "google_drive" faria o banco
+    // mentir sobre onde o documento está desde que a rota mudou.
+    provedor: dados.provedor ?? "pasta_sincronizada",
+    bucket_ou_pasta: dados.caminhoLogico,
     caminho: `${dados.caminhoLogico}/${dados.nomeFinal}`,
     identificador_externo: dados.identificadorExterno,
     nome_utilizado: dados.nomeFinal,
@@ -307,20 +308,95 @@ async function atualizarProposta(
   if (error) throw new Error(`Falha ao atualizar proposta: ${error.message}`);
 }
 
+/**
+ * Entrega no Google Drive: resolve a árvore de pastas por id e sobe o arquivo.
+ *
+ * Continua aqui porque a rota volta a fazer sentido se o acesso de aplicativo
+ * ao tenant sair um dia. Hoje o destino padrão é a pasta sincronizada.
+ */
+async function entregarNoDrive(dados: {
+  item: ItemAnalisado;
+  conteudo: Buffer;
+  mimeType: string;
+  nomeOriginal: string;
+  extensao: string;
+}): Promise<
+  | {
+      ok: true;
+      identificador: string;
+      caminhoLogico: string;
+      nomeFinal: string;
+      versao: number;
+      jaExistia: boolean;
+      provedor: string;
+    }
+  | { ok: false; erro: string }
+> {
+  const { item } = dados;
+
+  const segmentos = await segmentosDoItem(item);
+  if (!segmentos || segmentos.length === 0) {
+    return { ok: false, erro: "Não foi possível recalcular o destino a partir da regra." };
+  }
+
+  const arvore = await resolverArvore(segmentos, {
+    empresaId: item.empresa.empresaId,
+    criar: true,
+  });
+  if (!arvore.ok) return { ok: false, erro: arvore.erro };
+
+  const caminhoLogico = segmentos[segmentos.length - 1].caminhoLogico;
+  const versao = item.empresa.empresaId
+    ? await proximaVersao(item.empresa.empresaId, caminhoLogico)
+    : 1;
+
+  const nomeFinal =
+    versao === 1
+      ? item.nomeSugerido!
+      : item.nomeSugerido!.replace(/_v\d+(\.[^.]+)$/, `_v${versao}$1`);
+
+  const envio = await googleDrive.enviarNaPasta({
+    paiId: arvore.folha.externalId,
+    nome: nomeFinal,
+    conteudo: dados.conteudo,
+    mimeType: dados.mimeType,
+  });
+  if (!envio.ok) return { ok: false, erro: envio.erro };
+
+  return {
+    ok: true,
+    identificador: envio.identificadorExterno,
+    caminhoLogico,
+    nomeFinal,
+    versao,
+    jaExistia: envio.jaExistia,
+    provedor: "google_drive",
+  };
+}
+
 export function portasArquivamentoPadrao(): PortasArquivamento {
   return {
     buscarProposta,
     hashesAtuais,
     lerConteudoParaEnvio,
-    segmentosDoItem,
-    async resolverPasta(segmentos, empresaId) {
-      const r = await resolverArvore(segmentos, { empresaId, criar: true });
-      return r.ok ? { ok: true, externalId: r.folha.externalId } : { ok: false, erro: r.erro };
-    },
-    enviarArquivo: (params) => googleDrive.enviarNaPasta(params),
+    entregarArquivo: entregarNoDrive,
     documentoPorHash,
-    proximaVersao,
     registrarDocumento,
     atualizarProposta,
   };
 }
+
+/**
+ * Portas compartilhadas entre os destinos.
+ *
+ * Buscar proposta, conferir hash, ler conteúdo e registrar no banco é igual
+ * seja qual for o destino — só a ENTREGA muda.
+ */
+export const portasComuns = {
+  buscarProposta,
+  hashesAtuais,
+  lerConteudoParaEnvio,
+  documentoPorHash,
+  registrarDocumento,
+  atualizarProposta,
+};
