@@ -33,12 +33,14 @@ const REGRA_INTERNA: RegraArquivamento = {
 
 const REGRA_MENSAL: RegraArquivamento = {
   id: "r2",
-  codigo: "MENSAL_NOTAS_FISCAIS",
-  nome: "Notas fiscais",
+  codigo: "CLIENTE_DOCUMENTO",
+  nome: "Documento de cliente",
   escopo: "mensal",
-  caminho_modelo: ["01_DOCUMENTOS_MENSAIS", "{ANO}", "{COMPETENCIA}", "05_NOTAS_FISCAIS"],
+  // O tipo do documento vive no NOME, não em subpasta: a pasta da
+  // competência é plana de propósito.
+  caminho_modelo: ["{ANO}", "{COMPETENCIA}"],
   padrao_nome:
-    "{CODIGO}_{EMPRESA}_{COMPETENCIA}_{TIPO_DOCUMENTO}_{INSTITUICAO}_v{VERSAO}.{EXTENSAO}",
+    "{CODIGO}_{COMPETENCIA}_{TIPO_DOCUMENTO}_{INSTITUICAO}_v{VERSAO}.{EXTENSAO}",
   exige_empresa: true,
   exige_competencia: true,
   exige_instituicao: false,
@@ -49,8 +51,7 @@ const REGRA_MENSAL: RegraArquivamento = {
 const REGRA_EXTRATOS: RegraArquivamento = {
   ...REGRA_MENSAL,
   id: "r3",
-  codigo: "MENSAL_EXTRATOS_INVESTIMENTOS",
-  caminho_modelo: ["01_DOCUMENTOS_MENSAIS", "{ANO}", "{COMPETENCIA}", "03_EXTRATOS_E_INVESTIMENTOS"],
+  codigo: "CLIENTE_DOCUMENTO_COM_INSTITUICAO",
   exige_instituicao: true,
 };
 
@@ -59,15 +60,8 @@ const REGRA_PROJETO: RegraArquivamento = {
   codigo: "PROJETO_CARTOES_INSUMOS",
   nome: "Conferência de cartões — insumos",
   escopo: "projeto",
-  caminho_modelo: [
-    "02_RELATORIOS_E_PROJETOS",
-    "CONFERENCIA_DE_CARTOES",
-    "{ANO}",
-    "{COMPETENCIA}",
-    "01_INSUMOS",
-  ],
-  padrao_nome:
-    "{CODIGO}_{EMPRESA}_{COMPETENCIA}_{PROJETO}_{TIPO_DOCUMENTO}_v{VERSAO}.{EXTENSAO}",
+  caminho_modelo: ["{PROJETO}", "{ANO}", "{COMPETENCIA}"],
+  padrao_nome: "{CODIGO}_{COMPETENCIA}_{PROJETO}_{TIPO_DOCUMENTO}_v{VERSAO}.{EXTENSAO}",
   exige_empresa: true,
   exige_competencia: true,
   exige_instituicao: false,
@@ -119,7 +113,7 @@ describe("expandirDestino — regra mensal", () => {
     assert.ok(r.ok, r.ok ? "" : r.erro);
     assert.equal(
       r.caminhoLogico,
-      "01_CLIENTES_ATIVOS/TL/01_DOCUMENTOS_MENSAIS/2026/2026-09/05_NOTAS_FISCAIS"
+      "01_CLIENTES_ATIVOS/TL/2026/2026-09"
     );
     assert.equal(r.segmentos[0].nome, "01_CLIENTES_ATIVOS");
     assert.equal(r.segmentos[1].nome, "TL");
@@ -171,7 +165,7 @@ describe("expandirDestino — regra mensal", () => {
     assert.ok(r.ok);
     assert.equal(
       r.chaveLogica,
-      `empresa:${EMPRESA_ID}:01_DOCUMENTOS_MENSAIS:2026:2026-09:05_NOTAS_FISCAIS`
+      `empresa:${EMPRESA_ID}:2026:2026-09`
     );
     assert.ok(!r.chaveLogica.includes("TL"), "o nome da empresa não pode entrar na chave");
   });
@@ -198,7 +192,7 @@ describe("expandirDestino — regra mensal", () => {
     assert.ok(r.ok);
     assert.deepEqual(
       r.segmentos.map((s) => s.escopo),
-      ["estrutural", "empresa", "categoria", "periodo", "periodo", "categoria"]
+      ["estrutural", "empresa", "periodo", "periodo"]
     );
   });
 
@@ -225,7 +219,7 @@ describe("expandirDestino — regra mensal", () => {
 
   test("instituição só é exigida quando a regra pede", () => {
     const semExigir = expandirDestino(REGRA_MENSAL, CTX_BASE);
-    assert.ok(semExigir.ok, "MENSAL_NOTAS_FISCAIS não exige instituição");
+    assert.ok(semExigir.ok, "a regra base não exige instituição");
 
     const exigindo = expandirDestino(REGRA_EXTRATOS, CTX_BASE);
     assert.equal(exigindo.ok, false);
@@ -242,11 +236,9 @@ describe("expandirDestino — regra de projeto", () => {
       [
         "01_CLIENTES_ATIVOS:estrutural",
         "TL:empresa",
-        "02_RELATORIOS_E_PROJETOS:categoria",
         "CONFERENCIA_DE_CARTOES:projeto",
         "2026:periodo",
         "2026-09:periodo",
-        "01_INSUMOS:categoria",
       ]
     );
   });
@@ -296,7 +288,7 @@ describe("montarNomeArquivo", () => {
       versao: 2,
     });
     assert.ok(r.ok, r.ok ? "" : r.erro);
-    assert.equal(r.nome, "TL_TRANSPORTADORA_LUVRE_2026-09_EXTRATO_ITAU_v2.pdf");
+    assert.equal(r.nome, "TL_2026-09_EXTRATO_ITAU_v2.pdf");
   });
 
   test("placeholder opcional sem valor some, sem deixar '__' nem '{}'", () => {
@@ -304,7 +296,7 @@ describe("montarNomeArquivo", () => {
     assert.ok(r.ok, r.ok ? "" : r.erro);
     assert.ok(!r.nome.includes("{"), `sobrou placeholder: ${r.nome}`);
     assert.ok(!r.nome.includes("__"), `sobrou separador duplo: ${r.nome}`);
-    assert.equal(r.nome, "TL_TRANSPORTADORA_LUVRE_2026-09_NOTA_FISCAL_v1.pdf");
+    assert.equal(r.nome, "TL_2026-09_NOTA_FISCAL_v1.pdf");
   });
 
   test("versão cai para 1 quando não informada", () => {

@@ -56,25 +56,47 @@ for (const t of ["regras_arquivamento", "pastas_drive", "propostas_arquivamento"
 // 2. As regras foram semeadas na distribuição esperada.
 const { data: regras, error: erroRegras } = await admin
   .from("regras_arquivamento")
-  .select("codigo,escopo,caminho_modelo,exige_empresa,exige_competencia");
+  .select("codigo,escopo,caminho_modelo,padrao_nome,exige_empresa,exige_competencia")
+  // Só as ATIVAS. As antigas continuam na tabela para não cortar o vínculo
+  // com documentos já arquivados por elas.
+  .eq("ativo", true);
 
 if (erroRegras) {
   check(false, "leitura de regras_arquivamento", erroRegras.message);
 } else {
-  check(regras.length === 29, "29 regras semeadas", `achei ${regras.length}`);
+  // A estrutura do cliente foi simplificada para ano/competência: 6 regras
+  // internas + 1 de cliente. As antigas continuam na tabela, desativadas,
+  // porque documentos já arquivados apontam para elas.
+  check(regras.length === 7, "7 regras ativas", `achei ${regras.length}`);
 
   const porEscopo = {};
   for (const r of regras) porEscopo[r.escopo] = (porEscopo[r.escopo] ?? 0) + 1;
 
   for (const [escopo, esperado] of [
     ["interno", 6],
-    ["fixo", 3],
-    ["mensal", 8],
-    ["projeto", 12],
+    ["mensal", 1],
   ]) {
-    check(porEscopo[escopo] === esperado, `${esperado} regras de escopo "${escopo}"`,
+    check(porEscopo[escopo] === esperado, `${esperado} regra(s) de escopo "${escopo}"`,
       `achei ${porEscopo[escopo] ?? 0}`);
   }
+
+  const cliente = regras.find((r) => r.codigo === "CLIENTE_DOCUMENTO");
+  check(Boolean(cliente), "a regra única de cliente existe");
+  if (cliente) {
+    check(
+      JSON.stringify(cliente.caminho_modelo) === JSON.stringify(["{ANO}", "{COMPETENCIA}"]),
+      "documento de cliente vai só para ano/competência",
+      JSON.stringify(cliente.caminho_modelo)
+    );
+  }
+
+  // Nenhuma regra de cliente ativa pode ter subpasta de categoria: o tipo do
+  // documento vive no NOME agora.
+  const comCategoria = regras.filter(
+    (r) => r.escopo !== "interno" && r.caminho_modelo.length > 2
+  );
+  check(comCategoria.length === 0, "nenhuma regra de cliente cria subpasta de categoria",
+    comCategoria.map((r) => r.codigo).join(", "));
 
   // Invariantes de negócio — o seed pode estar completo e ainda assim errado.
   const internasComEmpresa = regras.filter((r) => r.escopo === "interno" && r.exige_empresa);
@@ -90,8 +112,14 @@ if (erroRegras) {
       ["mensal", "projeto"].includes(r.escopo) &&
       !JSON.stringify(r.caminho_modelo).includes("{COMPETENCIA}")
   );
-  check(semPlaceholder.length === 0, "mensal/projeto usam {COMPETENCIA} no caminho",
+  check(semPlaceholder.length === 0, "regra de cliente usa {COMPETENCIA} no caminho",
     semPlaceholder.map((r) => r.codigo).join(", "));
+
+  // {EMPRESA} no nome era desperdício: a pasta do cliente já está no caminho,
+  // e o caminho do Windows é curto.
+  const comEmpresaNoNome = regras.filter((r) => r.padrao_nome.includes("{EMPRESA}"));
+  check(comEmpresaNoNome.length === 0, "nenhum padrão de nome repete a empresa",
+    comEmpresaNoNome.map((r) => r.codigo).join(", "));
 }
 
 // 2b. Estrutura fixa do Drive.

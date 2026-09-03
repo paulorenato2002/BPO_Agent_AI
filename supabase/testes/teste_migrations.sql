@@ -790,31 +790,44 @@ begin
   perform pg_temp.checar('as 3 tabelas do arquivador foram criadas', n = 3);
 end $$;
 
--- Contagem exata por escopo: 6 internos + 3 fixos + 8 mensais + 12 de projeto.
+-- A estrutura do cliente foi simplificada: o tipo do documento saiu da pasta e
+-- passou para o nome. Sobram 6 regras internas + 1 de cliente.
 do $$
 declare
-  internos int; fixos int; mensais int; projetos int;
+  internos int; clientes int; antigas int;
 begin
-  select count(*) into internos  from public.regras_arquivamento where escopo = 'interno'  and ativo;
-  select count(*) into fixos     from public.regras_arquivamento where escopo = 'fixo'     and ativo;
-  select count(*) into mensais   from public.regras_arquivamento where escopo = 'mensal'   and ativo;
-  select count(*) into projetos  from public.regras_arquivamento where escopo = 'projeto'  and ativo;
+  select count(*) into internos from public.regras_arquivamento
+   where escopo = 'interno' and ativo;
+  select count(*) into clientes from public.regras_arquivamento
+   where escopo <> 'interno' and ativo;
 
   perform pg_temp.checar('6 regras internas', internos = 6);
-  perform pg_temp.checar('3 regras de documento fixo', fixos = 3);
-  perform pg_temp.checar('8 categorias mensais', mensais = 8);
-  perform pg_temp.checar('12 regras de projeto (4 projetos x 3 subcategorias)', projetos = 12);
+  perform pg_temp.checar('1 regra de documento de cliente', clientes = 1);
+
+  -- As antigas continuam na tabela: documentos já arquivados apontam para
+  -- elas por regra_arquivamento_id, e apagar cortaria esse histórico.
+  select count(*) into antigas from public.regras_arquivamento where not ativo;
+  perform pg_temp.checar('as 23 regras antigas foram desativadas, não apagadas', antigas = 23);
 end $$;
 
--- Os 4 projetos previstos estão cadastrados.
+-- A regra de cliente vai só para ano/competência.
 do $$
-declare faltando text[];
+declare modelo jsonb;
 begin
-  select array_agg(p) into faltando
-  from unnest(array['REPORTING_MENSAL','CONFERENCIA_DE_RECEBIMENTOS',
-                    'CONFERENCIA_DE_CARTOES','REVISAO_DE_DRE']) p
-  where not exists (select 1 from public.regras_arquivamento where projeto = p and ativo);
-  perform pg_temp.checar('os 4 projetos previstos têm regra', faltando is null);
+  select caminho_modelo into modelo from public.regras_arquivamento
+   where codigo = 'CLIENTE_DOCUMENTO' and ativo;
+  perform pg_temp.checar('documento de cliente vai para {ANO}/{COMPETENCIA}',
+    modelo = '["{ANO}","{COMPETENCIA}"]'::jsonb);
+end $$;
+
+-- {EMPRESA} no nome repetia o que a pasta do cliente já diz, e o caminho do
+-- Windows é curto: a raiz real já consome 112 dos 255 caracteres.
+do $$
+declare n int;
+begin
+  select count(*) into n from public.regras_arquivamento
+   where ativo and padrao_nome like '%{EMPRESA}%';
+  perform pg_temp.checar('nenhum padrão de nome ativo repete a empresa', n = 0);
 end $$;
 
 -- Competência só no formato YYYY-MM: o modelo de caminho usa o placeholder.
@@ -822,9 +835,10 @@ do $$
 declare n int;
 begin
   select count(*) into n from public.regras_arquivamento
-   where escopo in ('mensal','projeto')
+   where ativo
+     and escopo in ('mensal','projeto')
      and not (caminho_modelo::text like '%{COMPETENCIA}%');
-  perform pg_temp.checar('toda regra mensal/projeto usa {COMPETENCIA} no caminho', n = 0);
+  perform pg_temp.checar('regra de cliente ativa usa {COMPETENCIA} no caminho', n = 0);
 end $$;
 
 -- Cada escopo previsto tem regra.
@@ -832,9 +846,9 @@ do $$
 declare faltando text[];
 begin
   select array_agg(e) into faltando
-  from unnest(array['interno','fixo','mensal','projeto']) e
+  from unnest(array['interno','mensal']) e
   where not exists (select 1 from public.regras_arquivamento where escopo = e and ativo);
-  perform pg_temp.checar('há regra para os 4 escopos', faltando is null);
+  perform pg_temp.checar('há regra ativa para interno e cliente', faltando is null);
 end $$;
 
 -- Coerência: interno não exige empresa; mensal/projeto exigem competência.

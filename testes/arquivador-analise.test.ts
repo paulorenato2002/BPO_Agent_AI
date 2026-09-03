@@ -44,12 +44,13 @@ const BETA: EmpresaCandidata = {
 
 const REGRA_NOTAS: RegraArquivamento = {
   id: "r-notas",
-  codigo: "MENSAL_NOTAS_FISCAIS",
-  nome: "Notas fiscais",
+  codigo: "CLIENTE_DOCUMENTO",
+  nome: "Documento de cliente",
   escopo: "mensal",
-  caminho_modelo: ["01_DOCUMENTOS_MENSAIS", "{ANO}", "{COMPETENCIA}", "05_NOTAS_FISCAIS"],
+  // Pasta do cliente / ano / competência. O tipo vive no nome.
+  caminho_modelo: ["{ANO}", "{COMPETENCIA}"],
   padrao_nome:
-    "{CODIGO}_{EMPRESA}_{COMPETENCIA}_{TIPO_DOCUMENTO}_{INSTITUICAO}_v{VERSAO}.{EXTENSAO}",
+    "{CODIGO}_{COMPETENCIA}_{TIPO_DOCUMENTO}_{INSTITUICAO}_v{VERSAO}.{EXTENSAO}",
   exige_empresa: true,
   exige_competencia: true,
   exige_instituicao: false,
@@ -60,14 +61,8 @@ const REGRA_NOTAS: RegraArquivamento = {
 const REGRA_EXTRATOS: RegraArquivamento = {
   ...REGRA_NOTAS,
   id: "r-extratos",
-  codigo: "MENSAL_EXTRATOS_INVESTIMENTOS",
-  nome: "Extratos e investimentos",
-  caminho_modelo: [
-    "01_DOCUMENTOS_MENSAIS",
-    "{ANO}",
-    "{COMPETENCIA}",
-    "03_EXTRATOS_E_INVESTIMENTOS",
-  ],
+  codigo: "CLIENTE_DOCUMENTO_COM_INSTITUICAO",
+  nome: "Documento de cliente que exige instituição",
   exige_instituicao: true,
 };
 
@@ -111,7 +106,7 @@ function montar(opcoes: {
     conteudos = {},
     hashesAtuais = {},
     empresas = [ALFA, BETA],
-    classificacao = () => ({ regraCodigo: "MENSAL_NOTAS_FISCAIS", tipoDocumento: "NOTA_FISCAL" }),
+    classificacao = () => ({ regraCodigo: "CLIENTE_DOCUMENTO", tipoDocumento: "NOTA_FISCAL" }),
     documentoExistente = null,
     propostaAnterior = null,
     donoDaConversa = true,
@@ -195,11 +190,10 @@ describe("análise — caminho feliz", () => {
     assert.equal(item.empresa.confianca, "confirmado");
     assert.equal(item.empresa.empresaId, ALFA.id);
     assert.equal(item.competencia.valor, "2026-09");
-    assert.equal(item.regra.valor, "MENSAL_NOTAS_FISCAIS");
+    assert.equal(item.regra.valor, "CLIENTE_DOCUMENTO");
     assert.equal(
       item.caminhoSugerido,
-      "01_CLIENTES_ATIVOS/ALF/01_DOCUMENTOS_MENSAIS/2026/2026-09/05_NOTAS_FISCAIS/" +
-        "ALF_PANIFICADORA_ALFA_2026-09_NOTA_FISCAL_v1.pdf"
+"01_CLIENTES_ATIVOS/ALF/2026/2026-09/ALF_2026-09_NOTA_FISCAL_v1.pdf"
     );
   });
 
@@ -323,7 +317,7 @@ describe("competência e regra", () => {
     const texto = JSON.stringify(recebido);
     assert.ok(!/01_CLIENTES_ATIVOS/.test(texto), "o modelo não pode ver caminho");
     assert.ok(!/external_id|driveId/i.test(texto), "o modelo não pode ver id do Drive");
-    assert.match(texto, /MENSAL_NOTAS_FISCAIS/, "mas precisa ver os códigos de regra");
+    assert.match(texto, /CLIENTE_DOCUMENTO/, "mas precisa ver os códigos de regra");
   });
 
   test("instituição opcional ausente não impede o caminho, e some do nome", async () => {
@@ -341,7 +335,7 @@ describe("competência e regra", () => {
     const c = montar({
       conteudos: { "anexo-1": NOTA_ALFA },
       classificacao: () => ({
-        regraCodigo: "MENSAL_EXTRATOS_INVESTIMENTOS",
+        regraCodigo: "CLIENTE_DOCUMENTO_COM_INSTITUICAO",
         tipoDocumento: "EXTRATO",
       }),
     });

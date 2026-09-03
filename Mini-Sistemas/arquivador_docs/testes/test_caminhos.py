@@ -23,11 +23,13 @@ from arquivador.caminhos import (
 )
 
 REGRA_MENSAL = Regra(
-    codigo="MENSAL_NOTAS_FISCAIS",
-    nome="Notas fiscais",
+    codigo="CLIENTE_DOCUMENTO",
+    nome="Documento de cliente",
     escopo="mensal",
-    caminho_modelo=["01_DOCUMENTOS_MENSAIS", "{ANO}", "{COMPETENCIA}", "05_NOTAS_FISCAIS"],
-    padrao_nome="{CODIGO}_{EMPRESA}_{COMPETENCIA}_{TIPO_DOCUMENTO}_{INSTITUICAO}_v{VERSAO}.{EXTENSAO}",
+    # Pasta do cliente / ano / competencia. O tipo do documento vive no NOME:
+    # a pasta da competencia e plana de proposito.
+    caminho_modelo=["{ANO}", "{COMPETENCIA}"],
+    padrao_nome="{CODIGO}_{COMPETENCIA}_{TIPO_DOCUMENTO}_{INSTITUICAO}_v{VERSAO}.{EXTENSAO}",
     exige_empresa=True,
     exige_competencia=True,
 )
@@ -54,9 +56,7 @@ CTX = Contexto(
 class TestDestino:
     def test_empresa_nasce_dentro_do_container(self):
         d = montar_destino(REGRA_MENSAL, CTX)
-        assert d.caminho_relativo == (
-            "01_CLIENTES_ATIVOS/ALF/01_DOCUMENTOS_MENSAIS/2026/2026-09/05_NOTAS_FISCAIS"
-        )
+        assert d.caminho_relativo == "01_CLIENTES_ATIVOS/ALF/2026/2026-09"
         assert d.segmentos[0] == "01_CLIENTES_ATIVOS"
 
     def test_cliente_inativo_vai_para_o_outro_container(self):
@@ -120,15 +120,13 @@ class TestSeguranca:
 class TestNome:
     def test_nome_completo(self):
         ctx = Contexto(**{**CTX.__dict__, "instituicao": "Itau", "versao": 2})
-        assert montar_nome(REGRA_MENSAL, ctx) == (
-            "ALF_PANIFICADORA_ALFA_2026-09_NOTA_FISCAL_ITAU_v2.pdf"
-        )
+        assert montar_nome(REGRA_MENSAL, ctx) == "ALF_2026-09_NOTA_FISCAL_ITAU_v2.pdf"
 
     def test_placeholder_opcional_some_sem_deixar_rastro(self):
         nome = montar_nome(REGRA_MENSAL, CTX)
         assert "{" not in nome
         assert "__" not in nome
-        assert nome == "ALF_PANIFICADORA_ALFA_2026-09_NOTA_FISCAL_v1.pdf"
+        assert nome == "ALF_2026-09_NOTA_FISCAL_v1.pdf"
 
     def test_extensao_normalizada(self):
         ctx = Contexto(**{**CTX.__dict__, "extensao": ".PDF"})
