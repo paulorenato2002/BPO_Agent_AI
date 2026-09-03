@@ -32,7 +32,26 @@ describe("contrato exposto ao modelo", () => {
     for (const proibido of ["caminho", "pasta", "driveId", "externalId", "destino"]) {
       assert.ok(!props.includes(proibido), `o modelo não pode informar "${proibido}"`);
     }
-    assert.deepEqual(props.sort(), ["anexoIds", "empresaContextoId"]);
+    assert.deepEqual(props.sort(), ["anexoIds", "correcoes", "empresaContextoId"]);
+  });
+
+  test("correções aceitam só os campos conhecidos", () => {
+    const v = ferramentaAnalisarDocumentos.validarEntrada;
+    const r = v({
+      anexoIds: ["a1"],
+      correcoes: {
+        a1: { competencia: "2026-08", caminho: "/inventado", empresaId: "e1" },
+        // Correção de anexo que não está no lote é descartada.
+        outro: { competencia: "2026-01" },
+      },
+    });
+
+    assert.equal(r.valido, true);
+    if (!r.valido) return;
+
+    assert.deepEqual(Object.keys(r.dado.correcoes ?? {}), ["a1"]);
+    assert.deepEqual(Object.keys(r.dado.correcoes!.a1).sort(), ["competencia", "empresaId"]);
+    assert.ok(!("caminho" in r.dado.correcoes!.a1), "campo inventado não pode passar");
   });
 
   test("o modelo não informa conversa nem mensagem", () => {

@@ -29,8 +29,17 @@ classificar. Cada arquivo é analisado por si — um lote pode ter empresas dife
 Passe o anexoId que veio no bloco do arquivo anexado. Se algum campo não for
 identificado, a proposta dirá o que falta em vez de chutar.`;
 
+export type CorrecaoEntrada = {
+  empresaId?: string | null;
+  competencia?: string | null;
+  tipoDocumento?: string | null;
+  instituicao?: string | null;
+  regraCodigo?: string | null;
+};
+
 export type EntradaFerramentaAnalise = {
   anexoIds: string[];
+  correcoes?: Record<string, CorrecaoEntrada>;
   conversaId?: string | null;
   mensagemId?: string | null;
   empresaContextoId?: string | null;
@@ -56,10 +65,37 @@ const validarEntrada: Validador<EntradaFerramentaAnalise> = (dado) => {
 
   if (problemas.length > 0) return { valido: false, problemas };
 
+  // Correções: só os campos conhecidos, só string. Um objeto solto do modelo
+  // não pode virar chave arbitrária no que vai para a análise.
+  const CAMPOS_CORRIGIVEIS = [
+    "empresaId",
+    "competencia",
+    "tipoDocumento",
+    "instituicao",
+    "regraCodigo",
+  ] as const;
+
+  const correcoes: Record<string, CorrecaoEntrada> = {};
+  const brutasCorrecoes = d.correcoes;
+  if (brutasCorrecoes && typeof brutasCorrecoes === "object") {
+    for (const [anexoId, valor] of Object.entries(brutasCorrecoes as Record<string, unknown>)) {
+      if (!anexoIds.includes(anexoId)) continue; // correção de anexo fora do lote
+      if (!valor || typeof valor !== "object") continue;
+
+      const limpa: CorrecaoEntrada = {};
+      for (const campo of CAMPOS_CORRIGIVEIS) {
+        const v = (valor as Record<string, unknown>)[campo];
+        if (typeof v === "string" && v.trim()) limpa[campo] = v.trim();
+      }
+      if (Object.keys(limpa).length > 0) correcoes[anexoId] = limpa;
+    }
+  }
+
   return {
     valido: true,
     dado: {
       anexoIds,
+      correcoes: Object.keys(correcoes).length > 0 ? correcoes : undefined,
       conversaId: opcional("conversaId"),
       mensagemId: opcional("mensagemId"),
       empresaContextoId: opcional("empresaContextoId"),
@@ -111,6 +147,25 @@ export const ferramentaAnalisarDocumentos: DefinicaoFerramenta<
         description:
           "Empresa já em uso na conversa. Serve de pista fraca; o conteúdo do arquivo prevalece.",
       },
+      correcoes: {
+        type: "object",
+        description:
+          "O que o USUÁRIO informou, por anexoId. Use quando a análise anterior " +
+          "voltou com campo faltando ou conflito e o usuário respondeu. " +
+          "empresaId precisa ser o id real vindo de consultar_dados na tabela " +
+          "empresas — NUNCA invente. competencia é AAAA-MM.",
+        additionalProperties: {
+          type: "object",
+          properties: {
+            empresaId: { type: "string" },
+            competencia: { type: "string" },
+            tipoDocumento: { type: "string" },
+            instituicao: { type: "string" },
+            regraCodigo: { type: "string" },
+          },
+          additionalProperties: false,
+        },
+      },
     },
     required: ["anexoIds"],
     additionalProperties: false,
@@ -138,6 +193,7 @@ export const ferramentaAnalisarDocumentos: DefinicaoFerramenta<
 
     const pedido: EntradaAnalise = {
       anexoIds: entrada.anexoIds,
+      correcoes: entrada.correcoes,
       // O servidor manda. O que o modelo mandou fica só como reserva.
       conversaId: contexto.conversaId ?? entrada.conversaId ?? null,
       mensagemId: contexto.mensagemId ?? entrada.mensagemId ?? null,

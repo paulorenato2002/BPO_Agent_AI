@@ -552,3 +552,94 @@ describe("hash e validade da proposta", () => {
     assert.equal(propostaExpirada(amanha), false);
   });
 });
+
+describe("correções do usuário", () => {
+  test("competência informada resolve o conflito e libera o caminho", async () => {
+    // Caso real: fatura de cartão cita dois meses. A análise trava, o usuário
+    // diz qual é, e a proposta precisa sair.
+    const c = montar({
+      conteudos: { "anexo-1": `Fatura ${CNPJ_ALFA}\nPeriodo de 07/2026 a 08/2026` },
+    });
+
+    const semCorrecao = await analisarDocumentos({ anexoIds: ["anexo-1"] }, USUARIO, c.portas);
+    assert.ok(semCorrecao.ok);
+    assert.equal(semCorrecao.proposta.itens[0].competencia.confianca, "conflitante");
+    assert.equal(semCorrecao.proposta.itens[0].caminhoSugerido, null);
+
+    const comCorrecao = await analisarDocumentos(
+      { anexoIds: ["anexo-1"], correcoes: { "anexo-1": { competencia: "2026-08" } } },
+      USUARIO,
+      c.portas
+    );
+
+    assert.ok(comCorrecao.ok);
+    const item = comCorrecao.proposta.itens[0];
+    assert.equal(item.competencia.valor, "2026-08");
+    assert.equal(item.competencia.confianca, "confirmado");
+    assert.equal(item.conflitos.length, 0, "o conflito resolvido não pode continuar aberto");
+    assert.match(item.caminhoSugerido ?? "", /2026-08/);
+    assert.equal(item.status, "analisado");
+  });
+
+  test("empresa informada vence a ausência de sinal no documento", async () => {
+    const c = montar({ conteudos: { "anexo-1": "documento sem identificacao\n09/2026" } });
+
+    const r = await analisarDocumentos(
+      { anexoIds: ["anexo-1"], correcoes: { "anexo-1": { empresaId: ALFA.id } } },
+      USUARIO,
+      c.portas
+    );
+
+    assert.ok(r.ok);
+    const item = r.proposta.itens[0];
+    assert.equal(item.empresa.empresaId, ALFA.id);
+    assert.equal(item.empresa.confianca, "confirmado");
+  });
+
+  test("empresa fora da carteira visível NÃO é aceita", async () => {
+    // Aceitar um id solto seria arquivar em cliente que o usuário nem enxerga.
+    const c = montar({ conteudos: { "anexo-1": "sem identificacao" }, empresas: [BETA] });
+
+    const r = await analisarDocumentos(
+      { anexoIds: ["anexo-1"], correcoes: { "anexo-1": { empresaId: ALFA.id } } },
+      USUARIO,
+      c.portas
+    );
+
+    assert.ok(r.ok);
+    assert.equal(r.proposta.itens[0].empresa.empresaId, null);
+  });
+
+  test("a evidência deixa claro que veio do usuário, não do documento", async () => {
+    const c = montar({ conteudos: { "anexo-1": "sem identificacao" } });
+
+    const r = await analisarDocumentos(
+      { anexoIds: ["anexo-1"], correcoes: { "anexo-1": { competencia: "2026-08" } } },
+      USUARIO,
+      c.portas
+    );
+
+    assert.ok(r.ok);
+    const evidencia = r.proposta.itens[0].evidencias.find((e) => e.campo === "competencia");
+    assert.ok(evidencia, "correção sem evidência não é auditável");
+    assert.equal(evidencia.origem, "contexto");
+    assert.match(evidencia.detalhe, /Informado pelo usuário/);
+  });
+
+  test("correção só afeta o anexo indicado", async () => {
+    const c = montar({
+      anexos: [anexo({ id: "a1", nome_original: "n1.pdf" }), anexo({ id: "a2", nome_original: "n2.pdf" })],
+      conteudos: { a1: NOTA_ALFA, a2: `CNPJ ${CNPJ_ALFA} sem data` },
+    });
+
+    const r = await analisarDocumentos(
+      { anexoIds: ["a1", "a2"], correcoes: { a2: { competencia: "2026-01" } } },
+      USUARIO,
+      c.portas
+    );
+
+    assert.ok(r.ok);
+    assert.equal(r.proposta.itens[0].competencia.valor, "2026-09", "a1 não podia ser afetado");
+    assert.equal(r.proposta.itens[1].competencia.valor, "2026-01");
+  });
+});

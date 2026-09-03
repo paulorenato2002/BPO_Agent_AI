@@ -109,8 +109,28 @@ export type ResultadoAnalise =
   | { ok: true; proposta: PropostaGerada; reaproveitada: boolean }
   | { ok: false; erro: string; codigo: string };
 
+/**
+ * O que o usuário informou à mão, por anexo.
+ *
+ * Existe porque documento de verdade é ambíguo o tempo todo: fatura de cartão
+ * cita dois meses, nota vem sem CNPJ, cliente novo ainda não está cadastrado.
+ * Sem um jeito de completar, a proposta empacava e a conversa não tinha saída.
+ *
+ * O que vem daqui entra como `confirmado` — foi um humano que disse — e a
+ * evidência registra que veio do usuário, não do documento.
+ */
+export type CorrecaoUsuario = {
+  empresaId?: string | null;
+  competencia?: string | null;
+  tipoDocumento?: string | null;
+  instituicao?: string | null;
+  regraCodigo?: string | null;
+};
+
 export type EntradaAnalise = {
   anexoIds: string[];
+  /** Correções informadas pelo usuário, por anexoId. */
+  correcoes?: Record<string, CorrecaoUsuario>;
   conversaId?: string | null;
   mensagemId?: string | null;
   /** Empresa já em uso na conversa. Pista fraca, nunca decisão. */
@@ -181,7 +201,8 @@ async function analisarUm(
   anexo: AnexoRegistrado,
   empresas: EmpresaCandidata[],
   regras: RegraArquivamento[],
-  empresaContextoId: string | null
+  empresaContextoId: string | null,
+  correcao: CorrecaoUsuario = {}
 ): Promise<{ item: ItemAnalisado; hashAtual: string }> {
   const base: ItemAnalisado = {
     anexoId: anexo.id,
@@ -276,63 +297,121 @@ async function analisarUm(
     });
   }
 
-  const competencia = idComp.competencia ?? classificacao.competencia ?? null;
+  // 6b. O que o USUÁRIO informou vence tudo.
+  //
+  // Documento de verdade é ambíguo o tempo todo — fatura de cartão cita dois
+  // meses, nota vem sem CNPJ. Sem isto a proposta empacava e a conversa não
+  // tinha saída. Um humano dizendo qual é vale mais que qualquer heurística.
+  const registrarInformado = (campo: string, valor: string) => {
+    evidencias.push({
+      campo,
+      valor,
+      origem: "contexto",
+      detalhe: `Informado pelo usuário na conversa (não foi lido do documento).`,
+    });
+  };
+
+  const empresaCorrigida = correcao.empresaId
+    ? (empresas.find((e) => e.id === correcao.empresaId) ?? null)
+    : null;
+
+  // Empresa corrigida que não está na carteira visível é recusada em silêncio:
+  // aceitar um id solto seria arquivar em cliente que o usuário nem enxerga.
+  const empresaFinal = empresaCorrigida ?? idEmpresa.empresa;
+  if (empresaCorrigida) {
+    registrarInformado("empresa", empresaCorrigida.codigo ?? empresaCorrigida.id);
+  }
+
+  const competenciaFinal =
+    correcao.competencia ?? idComp.competencia ?? classificacao.competencia ?? null;
+  if (correcao.competencia) registrarInformado("competencia", correcao.competencia);
+
+  const tipoFinal = correcao.tipoDocumento ?? classificacao.tipoDocumento ?? null;
+  if (correcao.tipoDocumento) registrarInformado("tipoDocumento", correcao.tipoDocumento);
+
+  const instituicaoFinal = correcao.instituicao ?? classificacao.instituicao ?? null;
+  if (correcao.instituicao) registrarInformado("instituicao", correcao.instituicao);
+
+  const regraCorrigida = correcao.regraCodigo
+    ? (regras.find((r) => r.codigo === correcao.regraCodigo) ?? null)
+    : null;
+  const regraFinal = regraCorrigida ?? regra;
+  if (regraCorrigida) registrarInformado("regra", regraCorrigida.codigo);
+
+  // O que o usuário resolveu deixa de ser conflito.
+  const conflitosAbertos = conflitos.filter((c) => {
+    if (c.campo === "empresa" && empresaCorrigida) return false;
+    if (c.campo === "competencia" && correcao.competencia) return false;
+    if (c.campo === "regra" && regraCorrigida) return false;
+    return true;
+  });
+
+  const competencia = competenciaFinal;
   const item: ItemAnalisado = {
     ...base,
     hashSha256: hashAtual,
     empresa: {
-      valor: idEmpresa.empresa ? (idEmpresa.empresa.codigo ?? idEmpresa.empresa.id) : null,
-      confianca: idEmpresa.confianca,
-      empresaId: idEmpresa.empresa?.id ?? null,
-      rotulo: idEmpresa.empresa?.nome_fantasia ?? idEmpresa.empresa?.razao_social ?? null,
+      valor: empresaFinal ? (empresaFinal.codigo ?? empresaFinal.id) : null,
+      confianca: empresaCorrigida ? "confirmado" : idEmpresa.confianca,
+      empresaId: empresaFinal?.id ?? null,
+      rotulo: empresaFinal?.nome_fantasia ?? empresaFinal?.razao_social ?? null,
     },
-    competencia: { valor: competencia, confianca: idComp.confianca },
+    competencia: {
+      valor: competencia,
+      confianca: correcao.competencia ? "confirmado" : idComp.confianca,
+    },
     regra: {
-      valor: regra?.codigo ?? null,
-      nome: regra?.nome ?? null,
-      confianca: regra ? "provavel" : classificacao.regraCodigo ? "conflitante" : "ausente",
+      valor: regraFinal?.codigo ?? null,
+      nome: regraFinal?.nome ?? null,
+      confianca: regraCorrigida
+        ? "confirmado"
+        : regraFinal
+          ? "provavel"
+          : classificacao.regraCodigo
+            ? "conflitante"
+            : "ausente",
     },
     tipoDocumento: {
-      valor: classificacao.tipoDocumento ?? null,
-      confianca: classificacao.tipoDocumento ? "provavel" : "ausente",
+      valor: tipoFinal,
+      confianca: correcao.tipoDocumento ? "confirmado" : tipoFinal ? "provavel" : "ausente",
     },
     instituicao: {
-      valor: classificacao.instituicao ?? null,
-      confianca: classificacao.instituicao ? "provavel" : "ausente",
+      valor: instituicaoFinal,
+      confianca: correcao.instituicao ? "confirmado" : instituicaoFinal ? "provavel" : "ausente",
     },
     evidencias,
-    conflitos,
+    conflitos: conflitosAbertos,
   };
 
-  if (!regra) {
+  if (!regraFinal) {
     item.camposFaltantes = ["regra"];
     return { item, hashAtual };
   }
 
   // 7. Nome e caminho — calculados AQUI, pelo núcleo puro, nunca pelo modelo.
   const contexto: ContextoArquivamento = {
-    empresaId: idEmpresa.empresa?.id ?? null,
-    empresaCodigo: idEmpresa.empresa?.codigo ?? null,
-    empresaNome: idEmpresa.empresa?.nome_fantasia ?? idEmpresa.empresa?.razao_social ?? null,
+    empresaId: empresaFinal?.id ?? null,
+    empresaCodigo: empresaFinal?.codigo ?? null,
+    empresaNome: empresaFinal?.nome_fantasia ?? empresaFinal?.razao_social ?? null,
     competencia,
-    instituicao: classificacao.instituicao ?? null,
-    tipoDocumento: classificacao.tipoDocumento ?? null,
+    instituicao: instituicaoFinal,
+    tipoDocumento: tipoFinal,
     dataDocumento: classificacao.dataDocumento ?? null,
     versao: 1,
     extensao: anexo.extensao,
   };
 
-  const faltantes = conferirCompatibilidade(regra, contexto);
+  const faltantes = conferirCompatibilidade(regraFinal, contexto);
   item.camposFaltantes = faltantes;
 
   // Empresa exigida mas não resolvida: nada de caminho. Não inventamos.
-  if (regra.exige_empresa && idEmpresa.empresa) {
-    contexto.pastaClientes = await portas.nomePastaClientes(idEmpresa.empresa.ativo);
+  if (regraFinal.exige_empresa && empresaFinal) {
+    contexto.pastaClientes = await portas.nomePastaClientes(empresaFinal.ativo);
   }
 
-  if (faltantes.length === 0 && conflitos.length === 0) {
-    const destino = expandirDestino(regra, contexto);
-    const nome = montarNomeArquivo(regra, contexto);
+  if (faltantes.length === 0 && conflitosAbertos.length === 0) {
+    const destino = expandirDestino(regraFinal, contexto);
+    const nome = montarNomeArquivo(regraFinal, contexto);
 
     if (destino.ok && nome.ok) {
       item.caminhoSugerido = `${destino.caminhoLogico}/${nome.nome}`;
@@ -350,8 +429,8 @@ async function analisarUm(
 
   // 8. Duplicidade por (empresa, hash). Só faz sentido com empresa resolvida:
   //    o mesmo hash em clientes diferentes não é duplicata.
-  if (idEmpresa.empresa) {
-    const jaExiste = await portas.buscarDocumentoPorHash(idEmpresa.empresa.id, hashAtual);
+  if (empresaFinal) {
+    const jaExiste = await portas.buscarDocumentoPorHash(empresaFinal.id, hashAtual);
     if (jaExiste) {
       item.possivelDuplicata = {
         documentoId: jaExiste.id,
@@ -439,7 +518,8 @@ export async function analisarDocumentos(
       anexo,
       empresas,
       regras,
-      entrada.empresaContextoId ?? null
+      entrada.empresaContextoId ?? null,
+      entrada.correcoes?.[anexo.id] ?? {}
     );
     itens.push(item);
     hashes.push({ anexoId: anexo.id, hash: hashAtual });
