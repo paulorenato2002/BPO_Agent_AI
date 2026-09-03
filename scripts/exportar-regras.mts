@@ -33,7 +33,6 @@ const { supabaseAdmin } = await import("../lib/supabase-admin");
 
 const destino = path.resolve(
   raizProjeto,
-  "..",
   "Mini-Sistemas",
   "arquivador_docs",
   "dados",

@@ -1,0 +1,3 @@
+# O sistema em si usa só a biblioteca padrão do Python.
+# Isto é apenas para rodar os testes.
+pytest>=8.0

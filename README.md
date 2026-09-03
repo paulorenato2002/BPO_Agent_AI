@@ -3,6 +3,36 @@
 Interface de chat (Next.js) que conversa com um agente OpenAI com acesso de
 leitura/escrita ao banco Supabase do BPO, via function calling.
 
+### O repositório tem mais que o agente
+
+| Pasta | O que é |
+|---|---|
+| (raiz) | O agente: Next.js, banco, ferramentas do modelo |
+| [`Mini-Sistemas/`](Mini-Sistemas/) | Processos com etapas, estado e tratamento de erro. Chamáveis pelo agente, pelo n8n ou por agendador. |
+| [`Ferramentas Auxiliares/`](Ferramentas%20Auxiliares/) | Scripts avulsos: uma coisa só, rodada à mão, sem guardar estado. |
+
+Como as peças se encaixam no arquivamento de documentos:
+
+```
+usuário anexa documento no chat
+        │
+        ▼
+   agente ──── lê, identifica empresa, competência e tipo
+        │
+        ▼
+ Mini-Sistemas/arquivador_docs ──── monta o caminho, renomeia,
+        │                            cria pastas e arquiva
+        ▼
+ pasta sincronizada do OneDrive ──── o OneDrive sobe para a nuvem
+```
+
+O agente **classifica**; o mini-sistema **arquiva**. Cada um faz uma coisa.
+
+O acesso por API ao OneDrive dependia de uma aprovação do tenant que não
+estava disponível. Como o OneDrive já sincroniza as pastas na máquina, o
+arquivador escreve só no disco local e deixa a sincronização com o próprio
+OneDrive — sem API, sem OAuth, sem espera.
+
 ### Como funciona
 
 - `app/page.tsx` — interface de texto (chat).
