@@ -20,7 +20,8 @@
     "verificar:arquivador": "node scripts/verificar-arquivador.mjs",
     "drive:estrutura": "node --conditions=react-server --import tsx scripts/drive-estrutura.mts",
     "drive:auditar": "node --conditions=react-server --import tsx scripts/drive-auditar.mts",
-    "teste:ponta-a-ponta": "node --conditions=react-server --import tsx scripts/teste-ponta-a-ponta.mts"
+    "teste:ponta-a-ponta": "node --conditions=react-server --import tsx scripts/teste-ponta-a-ponta.mts",
+    "exportar:regras": "node --conditions=react-server --import tsx scripts/exportar-regras.mts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.5",
