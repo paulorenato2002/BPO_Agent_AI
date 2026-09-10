@@ -4,7 +4,8 @@ import {
   type ContextoArquivamento,
   type RegraArquivamento,
 } from "./caminhos";
-import { verificarBloqueio } from "./bloqueios";
+import { redigirSegredos, verificarBloqueio } from "./bloqueios";
+import { assinaturasDoArquivo, chaveConta } from "./assinatura";
 import {
   identificarEmpresa,
   identificarCompetencia,
@@ -89,6 +90,17 @@ export type ItemAnalisado = {
   nomeSugerido: string | null;
   caminhoSugerido: string | null;
   possivelDuplicata: { documentoId: string; nome: string; motivo: string } | null;
+  /**
+   * O que torna este documento reconhecível no mês que vem.
+   *
+   * Fica no item porque quem aprende é a CONFIRMAÇÃO, não a análise: só depois
+   * de uma pessoa aprovar é que a conta e o layout viram cadastro. Guardar aqui
+   * é o que liga os dois momentos.
+   *
+   * OPCIONAL de propósito: propostas gravadas antes desta versão não têm o
+   * campo, e continuam sendo confirmáveis. Elas só não ensinam nada.
+   */
+  assinaturas?: { conta: string | null; agencia: string | null; layout: string | null };
 };
 
 export type PropostaGerada = {
@@ -143,12 +155,32 @@ export type PortasAnalise = {
   buscarAnexosDoUsuario(ids: string[], usuarioId: string): Promise<AnexoRegistrado[]>;
   conversaPertenceAoUsuario(conversaId: string, usuarioId: string): Promise<boolean>;
   mensagemPertenceAConversa(mensagemId: string, conversaId: string): Promise<boolean>;
-  /** Conteúdo atual + hash atual. O hash é RECALCULADO, não lido do registro. */
-  lerConteudo(anexo: AnexoRegistrado): Promise<{ texto: string; hashAtual: string }>;
+  /**
+   * Conteúdo atual + hash atual. O hash é RECALCULADO, não lido do registro.
+   *
+   * `parsed` acompanha o texto porque a assinatura de layout de uma planilha é
+   * o conjunto de COLUNAS, que se perde quando as linhas viram texto corrido.
+   */
+  lerConteudo(anexo: AnexoRegistrado): Promise<{
+    texto: string;
+    hashAtual: string;
+    parsed?: { tipo: "tabular"; colunas: string[] } | { tipo: "texto"; texto: string };
+  }>;
+  /**
+   * O que já foi confirmado antes, para não perguntar de novo.
+   *
+   * Opcional: sem esta porta o sistema continua funcionando, só volta a
+   * perguntar todo mês. É o que permite testar a análise sem banco.
+   */
+  buscarAprendizado?(chaves: { contas: string[]; layouts: string[] }): Promise<{
+    contas: Map<string, { empresaId: string; conta: string; instituicao: string | null }>;
+    layouts: Map<string, { tipoDocumento: string; instituicao: string | null; regraCodigo: string | null }>;
+  }>;
   /** Só as empresas que este usuário pode enxergar. */
   listarEmpresasVisiveis(usuarioId: string): Promise<EmpresaCandidata[]>;
   listarRegrasAtivas(): Promise<RegraArquivamento[]>;
   nomePastaClientes(empresaAtiva: boolean): Promise<string>;
+  nomePastaEmpresa?(container: string, codigo: string): Promise<string>;
   buscarDocumentoPorHash(
     empresaId: string,
     hash: string
@@ -221,6 +253,8 @@ async function analisarUm(
     nomeSugerido: null,
     caminhoSugerido: null,
     possivelDuplicata: null,
+    // Preenchidas depois da extração; um item bloqueado antes de ler não tem.
+    assinaturas: { conta: null, agencia: null, layout: null },
   };
 
   // 1. Bloqueio pelo NOME — antes de ler o arquivo.
@@ -238,7 +272,30 @@ async function analisarUm(
 
   // 2. Extração + hash recalculado. Não confiamos no hash do registro: o
   //    arquivo no Storage pode ter sido substituído desde o upload.
-  const { texto, hashAtual } = await portas.lerConteudo(anexo);
+  //
+  //    A falha de leitura é tratada AQUI, por item. Antes ela subia e derrubava
+  //    `analisarDocumentos` inteiro: um PDF corrompido no meio de um lote de
+  //    trinta fazia o usuário perder a análise dos outros vinte e nove e
+  //    recomeçar sem saber qual era o culpado. Agora o arquivo ilegível vira um
+  //    item bloqueado, com o motivo, e o lote segue.
+  let texto: string;
+  let hashAtual: string;
+  let parsed: { tipo: "tabular"; colunas: string[] } | { tipo: "texto"; texto: string } | undefined;
+  try {
+    ({ texto, hashAtual, parsed } = await portas.lerConteudo(anexo));
+  } catch (e) {
+    return {
+      hashAtual: anexo.hash_sha256,
+      item: {
+        ...base,
+        status: "bloqueado",
+        bloqueio: {
+          motivo: e instanceof Error ? e.message : "Não foi possível ler o arquivo.",
+          categoria: "ilegivel",
+        },
+      },
+    };
+  }
 
   // 3. Bloqueio pelo CONTEÚDO — antes de qualquer byte ir ao modelo.
   const porConteudo = verificarBloqueio(anexo.nome_original, texto);
@@ -254,8 +311,36 @@ async function analisarUm(
     };
   }
 
+  // 4. Tarja o que passou pelo bloqueio mas não deve chegar ao modelo.
+  //    Um extrato legítimo traz "SENHA : 50936" (senha de boleto) na coluna de
+  //    observações; recusar o documento por isso perdia o arquivo inteiro.
+  //    Daqui para baixo, `texto` já está sem os valores.
+  const { texto: textoSeguro } = redigirSegredos(texto);
+  texto = textoSeguro;
+
   const evidencias: Evidencia[] = [];
   const conflitos: { campo: string; motivo: string }[] = [];
+
+  // 4a. Assinaturas: a conta do titular e o layout do documento.
+  //
+  //     A consulta ao aprendizado acontece por item, e não uma vez para o lote,
+  //     porque a assinatura só existe DEPOIS de ler o arquivo — e ler acontece
+  //     aqui dentro. São duas leituras pequenas por documento, indexadas por
+  //     chave primária.
+  const assinaturas = assinaturasDoArquivo(
+    parsed ?? { tipo: "texto", texto },
+    texto
+  );
+  const aprendizado = portas.buscarAprendizado
+    ? await portas.buscarAprendizado({
+        contas: assinaturas.conta ? [chaveConta(assinaturas.conta)] : [],
+        layouts: assinaturas.layout ? [assinaturas.layout] : [],
+      })
+    : { contas: new Map(), layouts: new Map() };
+
+  const layoutConhecido = assinaturas.layout
+    ? aprendizado.layouts.get(assinaturas.layout) ?? null
+    : null;
 
   // 4. Empresa — só entre as que este usuário enxerga.
   const idEmpresa = identificarEmpresa(
@@ -263,9 +348,60 @@ async function analisarUm(
     { texto, nomeArquivo: anexo.nome_original, cnpjs: extrairCnpjs(`${texto} ${anexo.nome_original}`) },
     empresaContextoId
   );
-  evidencias.push(...idEmpresa.evidencias);
-  for (const c of idEmpresa.conflitos) {
-    conflitos.push({ campo: "empresa", motivo: `${c.rotulo}: ${c.motivo}` });
+
+  // 4b. A CONTA BANCÁRIA, quando já foi confirmada por alguém, decide.
+  //
+  // Casar o código do cliente com o texto funciona mal em extrato: os números
+  // "147" e "210" — códigos de dois clientes reais — aparecem como valores no
+  // meio dos lançamentos, e o documento é recusado por ambiguidade. Foi o que
+  // aconteceu num teste com um extrato de verdade.
+  //
+  // A conta não tem esse problema: ela identifica o titular. Quando ela já
+  // está cadastrada, vale mais que a busca por texto — inclusive para desfazer
+  // um conflito que a busca por texto criou.
+  const contaConhecida =
+    assinaturas.conta && aprendizado.contas.get(chaveConta(assinaturas.conta));
+  const empresaDaConta = contaConhecida
+    ? empresas.find((e) => e.id === contaConhecida.empresaId) ?? null
+    : null;
+
+  let empresaIdentificada = idEmpresa.empresa;
+  let confiancaEmpresa = idEmpresa.confianca;
+
+  if (empresaDaConta) {
+    const forteEDiferente =
+      idEmpresa.confianca === "confirmado" && idEmpresa.empresa?.id !== empresaDaConta.id;
+
+    if (forteEDiferente) {
+      // Dois sinais fortes discordando. Escolher um dos dois em silêncio é a
+      // pior saída possível: um deles está errado e ninguém vai conferir.
+      conflitos.push({
+        campo: "empresa",
+        motivo:
+          `A conta ${contaConhecida.conta} está cadastrada para ` +
+          `${empresaDaConta.codigo ?? empresaDaConta.razao_social}, mas o conteúdo aponta ` +
+          `${idEmpresa.empresa?.codigo ?? idEmpresa.empresa?.razao_social}. Confirme qual é.`,
+      });
+      empresaIdentificada = null;
+      confiancaEmpresa = "conflitante";
+    } else {
+      empresaIdentificada = empresaDaConta;
+      confiancaEmpresa = "confirmado";
+      evidencias.push({
+        campo: "empresa",
+        valor: empresaDaConta.codigo ?? empresaDaConta.razao_social ?? empresaDaConta.id,
+        origem: "conteudo",
+        detalhe:
+          `Conta ${contaConhecida.conta}` +
+          (contaConhecida.instituicao ? ` (${contaConhecida.instituicao})` : "") +
+          " já confirmada para esta empresa em arquivamento anterior.",
+      });
+    }
+  } else {
+    evidencias.push(...idEmpresa.evidencias);
+    for (const c of idEmpresa.conflitos) {
+      conflitos.push({ campo: "empresa", motivo: `${c.rotulo}: ${c.motivo}` });
+    }
   }
 
   // 5. Competência.
@@ -317,7 +453,7 @@ async function analisarUm(
 
   // Empresa corrigida que não está na carteira visível é recusada em silêncio:
   // aceitar um id solto seria arquivar em cliente que o usuário nem enxerga.
-  const empresaFinal = empresaCorrigida ?? idEmpresa.empresa;
+  const empresaFinal = empresaCorrigida ?? empresaIdentificada;
   if (empresaCorrigida) {
     registrarInformado("empresa", empresaCorrigida.codigo ?? empresaCorrigida.id);
   }
@@ -326,10 +462,30 @@ async function analisarUm(
     correcao.competencia ?? idComp.competencia ?? classificacao.competencia ?? null;
   if (correcao.competencia) registrarInformado("competencia", correcao.competencia);
 
-  const tipoFinal = correcao.tipoDocumento ?? classificacao.tipoDocumento ?? null;
+  // Ordem: o usuário vence o layout aprendido, e o layout aprendido vence o
+  // modelo. O layout só entra no mapa depois que uma pessoa confirmou aquele
+  // documento — então ele é uma decisão humana antiga, e vale mais que um
+  // palpite novo do classificador.
+  const tipoFinal =
+    correcao.tipoDocumento ?? layoutConhecido?.tipoDocumento ?? classificacao.tipoDocumento ?? null;
   if (correcao.tipoDocumento) registrarInformado("tipoDocumento", correcao.tipoDocumento);
+  else if (layoutConhecido) {
+    evidencias.push({
+      campo: "tipoDocumento",
+      valor: layoutConhecido.tipoDocumento,
+      origem: "conteudo",
+      detalhe:
+        "Documento com o mesmo layout já foi classificado e confirmado antes " +
+        "(mesmo conjunto de colunas/cabeçalho).",
+    });
+  }
 
-  const instituicaoFinal = correcao.instituicao ?? classificacao.instituicao ?? null;
+  const instituicaoFinal =
+    correcao.instituicao ??
+    layoutConhecido?.instituicao ??
+    classificacao.instituicao ??
+    assinaturas.conta?.instituicao ??
+    null;
   if (correcao.instituicao) registrarInformado("instituicao", correcao.instituicao);
 
   const regraCorrigida = correcao.regraCodigo
@@ -350,9 +506,16 @@ async function analisarUm(
   const item: ItemAnalisado = {
     ...base,
     hashSha256: hashAtual,
+    // Vai junto para a proposta: é o que a confirmação vai gravar como
+    // aprendizado, e sem isto o mês seguinte começaria do zero de novo.
+    assinaturas: {
+      conta: assinaturas.conta ? chaveConta(assinaturas.conta) : null,
+      agencia: assinaturas.conta?.agencia ?? null,
+      layout: assinaturas.layout,
+    },
     empresa: {
       valor: empresaFinal ? (empresaFinal.codigo ?? empresaFinal.id) : null,
-      confianca: empresaCorrigida ? "confirmado" : idEmpresa.confianca,
+      confianca: empresaCorrigida ? "confirmado" : confiancaEmpresa,
       empresaId: empresaFinal?.id ?? null,
       rotulo: empresaFinal?.nome_fantasia ?? empresaFinal?.razao_social ?? null,
     },
@@ -373,7 +536,14 @@ async function analisarUm(
     },
     tipoDocumento: {
       valor: tipoFinal,
-      confianca: correcao.tipoDocumento ? "confirmado" : tipoFinal ? "provavel" : "ausente",
+      // Layout já confirmado por uma pessoa vale "confirmado": não é palpite do
+      // modelo, é a decisão de alguém sobre este mesmo documento.
+      confianca:
+        correcao.tipoDocumento || (layoutConhecido && !correcao.tipoDocumento)
+          ? "confirmado"
+          : tipoFinal
+            ? "provavel"
+            : "ausente",
     },
     instituicao: {
       valor: instituicaoFinal,
@@ -407,6 +577,18 @@ async function analisarUm(
   // Empresa exigida mas não resolvida: nada de caminho. Não inventamos.
   if (regraFinal.exige_empresa && empresaFinal) {
     contexto.pastaClientes = await portas.nomePastaClientes(empresaFinal.ativo);
+    if (regraFinal.caminho_modelo.includes("{COMPETENCIA_PASTA}")) {
+      if (!portas.nomePastaEmpresa || !empresaFinal.codigo) {
+        item.camposFaltantes.push("pastaEmpresa");
+      } else {
+        try {
+          contexto.pastaEmpresa = await portas.nomePastaEmpresa(contexto.pastaClientes, empresaFinal.codigo);
+        } catch (e) {
+          item.camposFaltantes.push("pastaEmpresa");
+          conflitosAbertos.push({ campo: "empresa", motivo: e instanceof Error ? e.message : "Pasta do cliente não encontrada." });
+        }
+      }
+    }
   }
 
   if (faltantes.length === 0 && conflitosAbertos.length === 0) {

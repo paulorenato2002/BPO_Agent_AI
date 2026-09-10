@@ -14,11 +14,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 RAIZ_PROJETO = Path(__file__).resolve().parent.parent
+# Mini-Sistemas/arquivador_docs -> Mini-Sistemas -> raiz do Agente BPO.
+RAIZ_AGENTE = RAIZ_PROJETO.parent.parent
 
 
-def carregar_env(caminho: Path | None = None) -> None:
+def _ler_env(arquivo: Path) -> None:
     """Lê um .env simples. Sem dependência externa — são cinco linhas."""
-    arquivo = caminho or (RAIZ_PROJETO / ".env")
     if not arquivo.is_file():
         return
 
@@ -27,7 +28,42 @@ def carregar_env(caminho: Path | None = None) -> None:
         if not linha or linha.startswith("#") or "=" not in linha:
             continue
         chave, _, valor = linha.partition("=")
-        os.environ.setdefault(chave.strip(), valor.strip().strip('"').strip("'"))
+        chave = chave.strip()
+        valor = valor.strip().strip('"').strip("'")
+        # Chave vazia conta como AUSENTE, não como definida. `setdefault`
+        # sozinho faria um `SUPABASE_SERVICE_ROLE_KEY=` em branco no primeiro
+        # arquivo bloquear o valor real do segundo — e o erro apareceria como
+        # "configure a credencial", com a credencial configurada ao lado.
+        if valor and not os.environ.get(chave):
+            os.environ[chave] = valor
+
+
+def carregar_env(caminho: Path | None = None) -> None:
+    """
+    Carrega o ambiente do mini-sistema e, em seguida, o do projeto do agente.
+
+    A ordem importa: `setdefault` faz o PRIMEIRO valor vencer, então o `.env`
+    do mini-sistema manda e a raiz do agente só preenche o que faltou.
+
+    Por que ler a raiz também: a credencial do Supabase já existe lá, para o
+    chat. Pedir para copiá-la para um segundo arquivo criaria duas cópias do
+    mesmo segredo, que envelhecem em ritmos diferentes — e a hora de descobrir
+    que uma está velha é sempre a pior possível.
+
+    Só o que interessa ao arquivador é aproveitado; nada do resto (chave da
+    OpenAI, tokens do Google) é lido por este processo.
+    """
+    _ler_env(caminho or (RAIZ_PROJETO / ".env"))
+    _ler_env(RAIZ_AGENTE / ".env.local")
+    _ler_env(RAIZ_AGENTE / ".env")
+
+    # O chat chama a mesma URL de `NEXT_PUBLIC_SUPABASE_URL` (o prefixo existe
+    # para o navegador enxergar). Aqui o nome é SUPABASE_URL; a ponte evita
+    # duplicar o valor só por causa do nome.
+    if not os.environ.get("SUPABASE_URL"):
+        publica = os.environ.get("NEXT_PUBLIC_SUPABASE_URL", "").strip()
+        if publica:
+            os.environ["SUPABASE_URL"] = publica
 
 
 @dataclass(frozen=True)
@@ -74,4 +110,34 @@ def carregar_regras(caminho: Path) -> dict:
     dados = json.loads(caminho.read_text(encoding="utf-8"))
     if not dados.get("regras"):
         raise SystemExit(f"{caminho} não tem regras. Regere o arquivo.")
+    dados["regras"] = [regra_para_pasta_existente(r) for r in dados["regras"]]
     return dados
+
+
+def regra_para_pasta_existente(regra: dict) -> dict:
+    """
+    Adapta uma regra de cliente à estrutura de pasta que já existe no disco.
+
+    ESTA FUNÇÃO TEM UM GÊMEO em lib/arquivador/regras-pastas-existentes.ts.
+    O TypeScript analisa e propõe o destino; o Python recalcula antes de copiar
+    e RECUSA o item se o resultado divergir. Os dois têm de produzir o mesmo
+    caminho e o mesmo nome, sempre.
+
+    Precisa ser aplicável a uma regra avulsa, e não só ao catálogo exportado,
+    porque o worker recebe a regra dentro do payload da fila — fotografada do
+    banco, crua. Aplicar a adaptação só na leitura de `dados/regras.json`
+    deixava o worker calculando pela regra original enquanto o chat calculava
+    pela adaptada: todo item falhava com "a regra ou o nome da empresa mudou",
+    e a mensagem não dizia que a causa era esta.
+    """
+    if os.environ.get("ARQUIVADOR_ESTRUTURA") != "existente":
+        return regra
+    if not regra.get("exige_empresa", True):
+        return regra
+    return {
+        **regra,
+        "caminho_modelo": ["{ANO}", "{COMPETENCIA_PASTA}"],
+        "exige_competencia": True,
+        "projeto": None,
+        "padrao_nome": "{CODIGO}_{EMPRESA}_{COMPETENCIA}_{TIPO_DOCUMENTO}_{INSTITUICAO}_v{VERSAO}.{EXTENSAO}",
+    }

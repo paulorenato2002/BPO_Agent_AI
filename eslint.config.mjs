@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    ".teste-sql-runtime/**",
+    "**/.pytest_cache/**",
+    "**/.teste-resumo-temp/**",
+    "**/__pycache__/**",
   ]),
 ]);
 

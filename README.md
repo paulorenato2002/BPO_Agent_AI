@@ -3,6 +3,16 @@
 Interface de chat (Next.js) que conversa com um agente OpenAI com acesso de
 leitura/escrita ao banco Supabase do BPO, via function calling.
 
+### Vercel + Python no PC
+
+O destino padrão agora é uma fila no Supabase: depois da confirmação, o worker
+Python no PC baixa do Storage e arquiva na pasta sincronizada. O servidor web
+não precisa executar Python. Veja [como testar e ativar](docs/worker_local.md).
+
+Teste demonstrativo, sem API: na pasta `Mini-Sistemas/arquivador_docs`, execute
+`python -m arquivador.demonstracao`. Para consumir a fila real, use
+`python -m arquivador.worker` após configurar e aplicar a migration indicada.
+
 ### O repositório tem mais que o agente
 
 | Pasta | O que é |

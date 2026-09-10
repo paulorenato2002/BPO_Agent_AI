@@ -9,6 +9,7 @@ import { IconeMenu } from "./componentes/icones";
 import { useSaude } from "./hooks/useSaude";
 import { useConversas } from "./hooks/useConversas";
 import { useChat } from "./hooks/useChat";
+import { Arquivamentos } from "./componentes/Arquivamentos";
 
 export default function Pagina() {
   const [barraAberta, setBarraAberta] = useState(false);
@@ -151,6 +152,8 @@ export default function Pagina() {
           erro={chat.erro}
           onTentarNovamente={chat.tentarNovamente}
         />
+
+        {conversas.conversaAtivaId && <Arquivamentos key={conversas.conversaAtivaId} conversaId={conversas.conversaAtivaId} />}
 
         <CampoMensagem
           valor={entrada}

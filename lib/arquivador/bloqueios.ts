@@ -58,21 +58,35 @@ const NOMES_BLOQUEADOS = [
 ];
 
 /**
- * Padrões de segredo no CONTEÚDO.
+ * Padrões de segredo no CONTEÚDO, em dois grupos com tratamentos diferentes.
  *
- * Espelham o trigger da memória. Ficam deliberadamente colados no formato
- * "rótulo seguido de valor" — procurar só a palavra "senha" reprovaria um
- * documento que apenas fala sobre política de senhas, que é conteúdo legítimo
- * de BPO.
+ * POR QUE DOIS GRUPOS
+ * -------------------
+ * O tratamento era único: casou, recusa o arquivo inteiro. Isso reprovou um
+ * extrato financeiro real por causa de uma linha na coluna "Observações" que
+ * dizia `SENHA : 50936` — a senha do boleto, dado legítimo de cobrança, não
+ * credencial. O documento inteiro foi perdido por cinco dígitos.
+ *
+ * A diferença que importa não é a gravidade do segredo, é a CONFIANÇA do
+ * padrão:
+ *
+ *   ESTRUTURAIS  reconhecem o formato do próprio segredo (`-----BEGIN ... KEY`,
+ *                `AKIA` + 16, `sk-` + 16). Praticamente não dão falso positivo,
+ *                e um arquivo que os contém É uma credencial, não um documento
+ *                de cliente. Continuam RECUSANDO.
+ *
+ *   LEXICAIS     reconhecem só um rótulo seguido de valor (`senha:`, `token:`).
+ *                Falso positivo aqui é rotina em documento financeiro. Passam a
+ *                TARJAR: o trecho vira [REDIGIDO], o documento segue para
+ *                classificação, e o valor nunca chega ao modelo.
+ *
+ * Tarjar é mais seguro que recusar, não menos. Recusar não remove o segredo de
+ * lugar nenhum — só faz o usuário perder o documento e, na prática, procurar
+ * outro caminho para arquivá-lo. Tarjar remove o valor do que sai daqui.
  */
-const PADROES_SEGREDO: { nome: string; regex: RegExp }[] = [
-  { nome: "senha", regex: /(senha|password|passwd)\s*[:=]\s*\S/i },
+const PADROES_ESTRUTURAIS: { nome: string; regex: RegExp }[] = [
   {
-    nome: "token ou chave de API",
-    regex: /(token|bearer|api[_ -]?key|secret|chave[_ -]?api)\s*[:=]\s*\S/i,
-  },
-  {
-    // `Authorization: Bearer <token>` não casa no padrão acima — ali o rótulo
+    // `Authorization: Bearer <token>` não casa nos lexicais — ali o rótulo
     // precisa vir seguido de ":" ou "=", e aqui o "Bearer" é seguido de espaço.
     // É a forma mais comum de token vazado; ficar de fora seria o pior furo.
     nome: "token Bearer",
@@ -84,6 +98,47 @@ const PADROES_SEGREDO: { nome: string; regex: RegExp }[] = [
   { nome: "chave de service account Google", regex: /"private_key_id"\s*:/ },
   { nome: "chave AWS", regex: /\bAKIA[0-9A-Z]{16}\b/ },
 ];
+
+/**
+ * Rótulo seguido de valor. Deliberadamente colados nesse formato: procurar só
+ * a palavra "senha" tarjaria um documento que apenas fala sobre política de
+ * senhas, que é conteúdo legítimo de BPO.
+ *
+ * O `g` é necessário porque `redigirSegredos` percorre todas as ocorrências —
+ * uma planilha pode ter dezenas.
+ */
+const PADROES_LEXICAIS: { nome: string; regex: RegExp }[] = [
+  { nome: "senha", regex: /(senha|password|passwd)(\s*[:=]\s*)(\S+)/gi },
+  {
+    nome: "token ou chave de API",
+    regex: /(token|bearer|api[_ -]?key|secret|chave[_ -]?api)(\s*[:=]\s*)(\S+)/gi,
+  },
+];
+
+/** O que substitui o valor tarjado. Some no lugar do segredo, não do rótulo. */
+export const MARCA_REDIGIDO = "[REDIGIDO]";
+
+/**
+ * Devolve o texto com os valores dos padrões lexicais mascarados.
+ *
+ * Preserva o rótulo de propósito: o modelo continua vendo que ali havia uma
+ * senha de boleto — informação útil para classificar — sem ver o valor.
+ */
+export function redigirSegredos(texto: string): { texto: string; redigidos: number } {
+  let redigidos = 0;
+  let saida = texto;
+
+  for (const { regex } of PADROES_LEXICAIS) {
+    // `replace` com regex global reinicia `lastIndex` sozinho; usar `test`
+    // antes deixaria o índice sujo entre chamadas e puliria ocorrências.
+    saida = saida.replace(new RegExp(regex.source, regex.flags), (_m, rotulo, sep) => {
+      redigidos += 1;
+      return `${rotulo}${sep}${MARCA_REDIGIDO}`;
+    });
+  }
+
+  return { texto: saida, redigidos };
+}
 
 export type ResultadoBloqueio =
   | { bloqueado: false }
@@ -136,7 +191,7 @@ export function bloqueadoPorNome(nomeArquivo: string): ResultadoBloqueio {
  * que é exatamente o que estamos evitando.
  */
 export function bloqueadoPorConteudo(texto: string): ResultadoBloqueio {
-  for (const { nome, regex } of PADROES_SEGREDO) {
+  for (const { nome, regex } of PADROES_ESTRUTURAIS) {
     if (regex.test(texto)) {
       return {
         bloqueado: true,

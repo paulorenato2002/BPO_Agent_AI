@@ -16,8 +16,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import socket
 import sys
 from pathlib import Path
+
+from .api import ErroItem, ErroTransitorio, Supabase
 
 from .arquivar import arquivar, garantir_pasta
 from .caminhos import (
@@ -29,6 +33,8 @@ from .caminhos import (
     trocar_versao_no_nome,
 )
 from .config import carregar_config, carregar_regras
+from .mapear import ErroMapeamento, listar_containers, mapear_uma_vez, resumir, varrer_container
+from .pasta_cliente import resolver_pasta_cliente
 
 # O console do Windows usa cp1252 por padrão: acento sai como "J� EXISTIA" e
 # qualquer símbolo fora da tabela DERRUBA o programa com UnicodeEncodeError —
@@ -210,6 +216,60 @@ def cmd_estrutura(args, dados: dict) -> int:
     return 0
 
 
+def cmd_mapear(args, dados: dict) -> int:
+    """
+    Publica no banco o nome real da pasta de cada cliente.
+
+    Sem isso a análise na Vercel não monta destino nenhum: ela não enxerga o
+    disco. `--simular` mostra o que seria enviado e NÃO precisa de credencial —
+    serve para conferir a varredura antes de ligar o banco.
+    """
+    config = carregar_config()
+
+    print(f"\n{NEGRITO}Mapa de pastas de cliente{FIM}")
+    print(f"  raiz: {config.raiz}\n")
+
+    if not config.raiz_existe:
+        print(_cor(f"  A raiz não existe: {config.raiz}", VERMELHO))
+        return 1
+
+    try:
+        containers = listar_containers(dados)
+    except ErroMapeamento as e:
+        print(_cor(f"  {e}", VERMELHO))
+        return 1
+
+    if args.simular:
+        for container in containers:
+            try:
+                pastas = varrer_container(config.raiz, container)
+            except ErroMapeamento as e:
+                print(_cor(f"  {container}: {e}", AMARELO))
+                continue
+            print(f"  {_cor(container, NEGRITO)}: {len(pastas)} pasta(s)")
+            for nome in pastas[:20]:
+                print(f"    {nome}")
+            if len(pastas) > 20:
+                print(f"    {_cor('... e mais ' + str(len(pastas) - 20), CINZA)}")
+        print(f"\n  {_cor('SIMULACAO', AMARELO)} nada foi enviado ao banco.\n")
+        return 0
+
+    api = Supabase(
+        os.environ.get("SUPABASE_URL", ""), os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    )
+    identificador = os.environ.get("ARQUIVADOR_WORKER_ID", socket.gethostname())
+
+    try:
+        relatorios = mapear_uma_vez(api, config.raiz, dados, identificador)
+    except (ErroTransitorio, ErroItem) as e:
+        print(_cor(f"\n  {e}\n", VERMELHO))
+        return 1
+
+    print(resumir(relatorios))
+    print(f"\n  {_cor('MAPA ATUALIZADO', VERDE)} raiz: {identificador}\n")
+    return 0
+
+
 def cmd_arquivar(args, dados: dict) -> int:
     config = carregar_config()
     regras = _regras_por_codigo(dados)
@@ -240,6 +300,7 @@ def cmd_arquivar(args, dados: dict) -> int:
     )
 
     try:
+        resolver_pasta_cliente(config.raiz, regra, ctx)
         destino = montar_destino(regra, ctx)
         nome = montar_nome(regra, ctx)
     except ErroCaminho as e:
@@ -328,10 +389,15 @@ def cmd_json(args, dados: dict) -> int:
     )
 
     try:
+        resolver_pasta_cliente(config.raiz, regra, ctx)
         destino = montar_destino(regra, ctx)
         nome = montar_nome(regra, ctx)
     except ErroCaminho as e:
         print(json.dumps({"ok": False, "erro": str(e), "faltando": e.faltando}, ensure_ascii=False))
+        return 1
+
+    if entrada.get("caminho_confirmado") and entrada["caminho_confirmado"] != f"{destino.caminho_relativo}/{nome}":
+        print(json.dumps({"ok": False, "erro": "O destino mudou desde a proposta. Refaça a análise antes de arquivar."}, ensure_ascii=False))
         return 1
 
     if entrada.get("simular"):
@@ -393,6 +459,10 @@ def main(argv: list[str] | None = None) -> int:
     pe = sub.add_parser("estrutura", help="cria as pastas fixas na raiz")
     pe.add_argument("--aplicar", action="store_true", help="cria de verdade")
     pe.set_defaults(func=cmd_estrutura)
+
+    pm = sub.add_parser("mapear", help="publica no banco o nome real da pasta de cada cliente")
+    pm.add_argument("--simular", action="store_true", help="mostra a varredura sem enviar (dispensa credencial)")
+    pm.set_defaults(func=cmd_mapear)
 
     pa = sub.add_parser("arquivar", help="arquiva um documento")
     pa.add_argument("arquivo")

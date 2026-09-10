@@ -16,8 +16,18 @@ describe("contrato exposto ao modelo", () => {
     const d = ferramentaAnalisarDocumentos.descricao;
     // Sem isto o agente promete arquivamento e o usuário acha que acabou.
     assert.match(d, /NÃO arquiva/);
-    assert.match(d, /confirmar/i);
-    assert.match(d, /Drive/);
+    assert.match(d, /persistida/i);
+  });
+
+  test("a descrição manda apresentar a lista e esperar resposta", () => {
+    const d = ferramentaAnalisarDocumentos.descricao;
+    // O fluxo combinado: propor, mostrar, esperar o "sim". Sem estas
+    // instruções o modelo encadeia análise e arquivamento na mesma resposta e
+    // o usuário descobre o destino depois que o arquivo já foi.
+    assert.match(d, /APRESENTE A LISTA E ESPERE/i);
+    assert.match(d, /nome original/i);
+    assert.match(d, /competência/i);
+    assert.match(d, /Não chame arquivar_documentos na mesma resposta/i);
   });
 
   test("não exige aprovação: analisar não tem efeito externo", () => {
@@ -158,11 +168,29 @@ describe("catálogo", () => {
 });
 
 describe("ferramenta arquivar_documentos", () => {
-  test("a descrição avisa que 'ok' não é confirmação de itens", async () => {
+  test("arquivar só depois de o usuário ver a lista e aprovar", async () => {
     const { ferramentaArquivarDocumentos } = await import("../lib/ferramentas/arquivador");
     const d = ferramentaArquivarDocumentos.descricao;
-    assert.match(d, /NÃO são confirmação/);
-    assert.match(d, /pergunte antes/);
+
+    // A política mudou: antes um pedido direto já autorizava e os arquivos
+    // iam para a pasta do cliente sem ninguém conferir o destino.
+    assert.match(d, /SÓ CHAME DEPOIS DE MOSTRAR A LISTA E RECEBER UM SIM/);
+    assert.match(d, /Nunca chame na mesma resposta/i);
+
+    // A aprovação é interpretada, não casada contra uma lista fechada — mas a
+    // descrição precisa dar exemplos, senão o modelo fica rígido demais e
+    // ignora um "simbora" perfeitamente claro.
+    for (const palavra of ["sim", "ok", "confirmo", "simbora"]) {
+      assert.ok(d.includes(`"${palavra}"`), `faltou o exemplo "${palavra}"`);
+    }
+    assert.match(d, /NÃO\s+são\s+aprovação/i);
+  });
+
+  test("processar_documentos saiu do alcance do agente", async () => {
+    const { ferramentaProcessarDocumentos } = await import("../lib/ferramentas/arquivador");
+    // Ela analisa e arquiva na mesma chamada, pulando a conferência humana.
+    // Continua registrada para rotinas automáticas, mas o agente não a vê.
+    assert.equal(ferramentaProcessarDocumentos.disponivelParaAgente, false);
   });
 
   test("é marcada como risco alto: sobe arquivo para o Drive do cliente", async () => {

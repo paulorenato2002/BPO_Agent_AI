@@ -124,7 +124,7 @@ export type EntradaArquivamento = {
 };
 
 /** Só item analisado e sem pendência pode virar arquivo no Drive. */
-function itemArquivavel(item: ItemAnalisado): { pode: boolean; motivo?: string } {
+export function itemArquivavel(item: ItemAnalisado): { pode: boolean; motivo?: string } {
   if (item.status === "bloqueado") {
     return { pode: false, motivo: item.bloqueio?.motivo ?? "Arquivo bloqueado." };
   }
@@ -136,6 +136,9 @@ function itemArquivavel(item: ItemAnalisado): { pode: boolean; motivo?: string }
   }
   if (item.conflitos.length > 0) {
     return { pode: false, motivo: `Conflito não resolvido: ${item.conflitos[0].motivo}` };
+  }
+  if (item.empresa.empresaId && item.empresa.confianca !== "confirmado") {
+    return { pode: false, motivo: "Confirme qual é a empresa e repita a análise com correcoes.empresaId antes de arquivar." };
   }
   if (!item.caminhoSugerido || !item.nomeSugerido) {
     return { pode: false, motivo: "Item sem caminho ou nome calculado." };

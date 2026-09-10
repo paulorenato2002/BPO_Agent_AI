@@ -1,6 +1,7 @@
 import "server-only";
 import { analisarDocumentos, type EntradaAnalise, type PropostaGerada } from "../arquivador/analise";
 import type { ResultadoArquivamento } from "../arquivador/arquivamento";
+import type { ArquivamentoEnfileirado } from "../arquivador/fila";
 import type { DefinicaoFerramenta, ResultadoFerramenta, Validador } from "./tipos";
 
 /**
@@ -16,18 +17,30 @@ import type { DefinicaoFerramenta, ResultadoFerramenta, Validador } from "./tipo
  */
 
 /** Só o ramo de sucesso: o de falha vira ResultadoFerramenta.ok = false. */
-type ResultadoArquivamentoOk = Extract<ResultadoArquivamento, { ok: true }>;
+type ResultadoArquivamentoOk = Extract<ResultadoArquivamento, { ok: true }> | ArquivamentoEnfileirado;
 
-const DESCRICAO = `Analisa arquivos que o usuário anexou e PROPÕE onde cada um deve ser arquivado.
+const DESCRICAO = `Analisa os arquivos que o usuário anexou e PROPÕE onde cada um deve ser arquivado.
 
-NÃO arquiva nada. Não envia ao Google Drive, não cria pastas e não renomeia arquivos.
-Gera uma proposta que o usuário precisa confirmar depois, item por item.
+NÃO arquiva nada, não cria pastas e não renomeia arquivo no disco. Produz uma
+proposta persistida que só vira arquivamento quando o usuário aprovar.
 
-Use quando o usuário anexar documentos e pedir para arquivar, organizar, guardar ou
-classificar. Cada arquivo é analisado por si — um lote pode ter empresas diferentes.
+Use sempre que o usuário anexar documentos e pedir para arquivar, organizar,
+guardar ou classificar — inclusive quando o pedido parecer direto ("arquiva
+isso"). Analisar primeiro e mostrar o resultado é o fluxo, não uma etapa extra.
 
-Passe o anexoId que veio no bloco do arquivo anexado. Se algum campo não for
-identificado, a proposta dirá o que falta em vez de chutar.`;
+DEPOIS DE CHAMAR, APRESENTE A LISTA E ESPERE A RESPOSTA. Para cada arquivo,
+mostre em uma linha:
+  nome original -> nome novo | código e nome da empresa | competência
+
+Diga também, sem enfeitar, o que ficou pendente: item sem empresa, competência
+ambígua ou conflito entre clientes. Termine perguntando se pode enviar.
+
+Não chame arquivar_documentos na mesma resposta. O usuário precisa ver a lista
+e responder primeiro.
+
+Cada arquivo é analisado sozinho — um lote pode ter empresas diferentes. Passe
+o anexoId que veio no bloco do arquivo anexado. Campo que não foi identificado
+aparece como faltante, nunca chutado.`;
 
 export type CorrecaoEntrada = {
   empresaId?: string | null;
@@ -108,7 +121,7 @@ function resumir(proposta: PropostaGerada, reaproveitada: boolean): string {
   const { resumo } = proposta;
   const partes = [
     `${resumo.total} arquivo(s) analisado(s)`,
-    `${resumo.prontos} pronto(s) para confirmar`,
+    `${resumo.prontos} pronto(s) para arquivar`,
   ];
   if (resumo.incompletos > 0) partes.push(`${resumo.incompletos} com campo faltando`);
   if (resumo.bloqueados > 0) partes.push(`${resumo.bloqueados} bloqueado(s)`);
@@ -122,7 +135,7 @@ function resumir(proposta: PropostaGerada, reaproveitada: boolean): string {
   return (
     `${partes.join(", ")}. ` +
     (reaproveitada ? "Proposta já existente reaproveitada. " : "") +
-    "Nada foi arquivado: a proposta aguarda confirmação."
+    "Nada foi arquivado por esta ferramenta. Se o usuário já pediu para arquivar, execute arquivar_documentos agora sem exigir outra confirmação."
   );
 }
 
@@ -222,14 +235,27 @@ export const ferramentaAnalisarDocumentos: DefinicaoFerramenta<
 // Confirmação e arquivamento
 // ---------------------------------------------------------------------------
 
-const DESCRICAO_ARQUIVAR = `Arquiva no Google Drive os itens de uma proposta que o usuário JÁ CONFIRMOU.
+const DESCRICAO_ARQUIVAR = `Envia para a pasta os itens de uma proposta que o usuário JÁ VIU E APROVOU.
 
-Só chame depois de o usuário confirmar de forma inequívoca quais arquivos quer
-arquivar. "ok", "pode", "isso" ou silêncio NÃO são confirmação de itens
-específicos — se houver qualquer dúvida sobre quais arquivos, pergunte antes.
+SÓ CHAME DEPOIS DE MOSTRAR A LISTA E RECEBER UM SIM.
+A ordem é sempre: analisar_documentos -> você apresenta a lista -> o usuário
+responde -> só então esta ferramenta. Nunca chame na mesma resposta em que
+apresentou a proposta: o usuário ainda não teve chance de responder.
 
-Passe o propostaId, confirmar=true e a lista dos anexoIds confirmados. Itens
-fora da lista não são arquivados. Repetir a chamada não duplica arquivo.`;
+O que conta como aprovação: qualquer resposta afirmativa do usuário depois de
+ver a lista — "sim", "ok", "confirmo", "pode", "simbora", "manda", "isso
+mesmo", "beleza". Você interpreta a intenção; não existe lista fechada de
+palavras. Dúvida, pergunta, silêncio sobre um item ou pedido de mudança NÃO são
+aprovação.
+
+Se o usuário aprovar só parte ("pode mandar os do Sicoob"), envie apenas os
+anexoIds correspondentes. Itens fora da lista não são arquivados.
+
+Se o retorno for enfileirado, diga que aguardam processamento. NÃO diga que já
+estão na pasta. O status no chat é atualizado sozinho, sem novas chamadas de
+IA. Arquivos grandes podem demorar mais; avise sem prometer prazo.
+
+Repetir a chamada não duplica arquivo.`;
 
 export type EntradaFerramentaArquivar = {
   propostaId: string;
@@ -273,7 +299,7 @@ export const ferramentaArquivarDocumentos: DefinicaoFerramenta<
       propostaId: { type: "string", description: "Id da proposta gerada por analisar_documentos." },
       confirmar: {
         type: "boolean",
-        description: "Precisa ser true, e só depois de confirmação inequívoca do usuário.",
+        description: "true quando o usuário pediu para arquivar ou aceitou a proposta; não exige uma segunda confirmação.",
       },
       anexosConfirmados: {
         type: "array",
@@ -300,6 +326,12 @@ export const ferramentaArquivarDocumentos: DefinicaoFerramenta<
       return { ok: false, erro: "Arquivamento exige usuário autenticado.", codigoErro: "sem_usuario" };
     }
 
+    if (process.env.ARQUIVAMENTO_DESTINO !== "google_drive" && process.env.ARQUIVAMENTO_DESTINO !== "local") {
+      const { enfileirarArquivamento } = await import("../arquivador/fila");
+      const saida = await enfileirarArquivamento(entrada, contexto.usuarioId, contexto.conversaId ?? null);
+      return { ok: true, saida, resumo: "Solicitação registrada. Acompanhe o status de cada arquivo no chat. A fila aguarda o computador responsável estar ligado e com o worker aberto; enfileirado não significa arquivado. Arquivos grandes podem demorar mais." };
+    }
+
     const { arquivarDocumentos } = await import("../arquivador/arquivamento");
     const { portasArquivamentoEmUso } = await import("../arquivador/portas-arquivamento-local");
 
@@ -317,5 +349,44 @@ export const ferramentaArquivarDocumentos: DefinicaoFerramenta<
       saida: r,
       resumo: `${partes.join(", ")}. Proposta: ${r.statusProposta}.`,
     };
+  },
+};
+
+/**
+ * Analisa e arquiva numa tacada só.
+ *
+ * FORA DO ALCANCE DO AGENTE desde 2026-09. Ela pulava a etapa em que o usuário
+ * vê a lista antes de os arquivos irem para a pasta do cliente — e o fluxo
+ * combinado é o contrário: propor, mostrar nome novo, empresa e competência,
+ * esperar um "sim", só então enviar.
+ *
+ * Continua registrada porque etapas de rotina referenciam ferramentas por
+ * código (`etapas_modelo_rotina.ferramenta_codigo`), e sumir com o código
+ * quebraria uma rotina que a use. Um disparo automático, sem humano na
+ * conversa, é o único caso em que arquivar direto faz sentido.
+ */
+export const ferramentaProcessarDocumentos: DefinicaoFerramenta<EntradaFerramentaAnalise, {
+  proposta: PropostaGerada;
+  arquivamento: ResultadoArquivamentoOk | null;
+}> = {
+  ...ferramentaAnalisarDocumentos,
+  disponivelParaAgente: false,
+  codigo: "processar_documentos",
+  nome: "Analisar e arquivar documentos",
+  nivelRisco: "alto",
+  timeoutMs: 300_000,
+  descricao: "Use quando o usuário pedir para arquivar, guardar ou salvar os arquivos na pasta. O pedido já autoriza, sem segunda confirmação. Analisa, registra uma proposta REAL e arquiva os itens sem pendências. Pergunta apenas sobre itens ambíguos ou incompletos. NÃO use quando o usuário pedir apenas análise, simulação ou prévia. Aceita os mesmos anexoIds e correcoes de analisar_documentos.",
+  async handler(entrada, contexto) {
+    const analise = await ferramentaAnalisarDocumentos.handler(entrada, contexto);
+    if (!analise.ok) return analise;
+    const { itemArquivavel } = await import("../arquivador/arquivamento");
+    const prontos = analise.saida.itens.filter(i => itemArquivavel(i).pode).map(i => i.anexoId);
+    if (!prontos.length) return { ok: true, saida: { proposta: analise.saida, arquivamento: null },
+      resumo: "A análise foi registrada. Nenhum arquivo pôde ser arquivado: pergunte apenas pelos campos faltantes ou ambiguidades indicadas, sem pedir uma confirmação genérica." };
+    const arquivamento = await ferramentaArquivarDocumentos.handler({ propostaId: analise.saida.propostaId,
+      confirmar: true, anexosConfirmados: prontos }, contexto);
+    if (!arquivamento.ok) return arquivamento;
+    return { ok: true, saida: { proposta: analise.saida, arquivamento: arquivamento.saida },
+      resumo: `${arquivamento.resumo} ${analise.saida.itens.length - prontos.length} item(ns) com pendências. Não peça nova confirmação para o que já foi executado.` };
   },
 };

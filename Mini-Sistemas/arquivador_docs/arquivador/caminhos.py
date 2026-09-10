@@ -77,6 +77,7 @@ class Contexto:
 
     empresa_codigo: str | None = None
     empresa_nome: str | None = None
+    pasta_empresa: str | None = None
     pasta_clientes: str | None = None
     competencia: str | None = None
     instituicao: str | None = None
@@ -173,6 +174,7 @@ def montar_destino(regra: Regra, ctx: Contexto) -> Destino:
     substituicoes = {
         "ANO": ano,
         "COMPETENCIA": ctx.competencia,
+        "COMPETENCIA_PASTA": f"{ctx.competencia[5:7]}.{ano}" if ctx.competencia else None,
         "PROJETO": projeto,
     }
 
@@ -186,7 +188,7 @@ def montar_destino(regra: Regra, ctx: Contexto) -> Destino:
             raise ErroCaminho("Contêiner de clientes vazio.", ["pasta_clientes"])
         segmentos.append(container)
 
-        empresa = normalizar(ctx.empresa_codigo or ctx.empresa_nome or "")
+        empresa = sanitizar_segmento(ctx.pasta_empresa) if ctx.pasta_empresa else normalizar(ctx.empresa_codigo or ctx.empresa_nome or "")
         if not empresa:
             raise ErroCaminho("Nome da pasta da empresa vazio.", ["empresa_codigo"])
         segmentos.append(empresa)

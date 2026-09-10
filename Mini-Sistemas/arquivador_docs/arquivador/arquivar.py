@@ -195,6 +195,18 @@ def arquivar(
                     registrar_no_diario(diario, _evento(origem, resultado, mover))
                 return resultado
 
+            # Uma retomada pode encontrar sua cópia em v2/v3, não apenas v1.
+            # Conferir antes de escolher o próximo nome evita duplicar após
+            # queda de rede entre copiar no disco e registrar no banco.
+            for anterior in range(2, 1000):
+                existente = pasta / trocar_versao(nome_final, anterior)
+                if existente.is_file() and sha256_de(existente) == hash_origem:
+                    resultado = Resultado(status="ja_existia", caminho_final=str(existente),
+                        nome_final=existente.name, versao=anterior, sha256=hash_origem, tamanho_bytes=tamanho)
+                    if diario:
+                        registrar_no_diario(diario, _evento(origem, resultado, mover))
+                    return resultado
+
             # Conteúdo diferente com o mesmo nome: é versão nova.
             nome_final, versao = _proximo_nome_livre(pasta, nome_final, trocar_versao)
             alvo = pasta / nome_final

@@ -154,6 +154,13 @@ export function identificarEmpresa(
 
   const textoNorm = normalizar(sinais.texto);
   const nomeNorm = normalizar(sinais.nomeArquivo);
+  const siglas = candidatas.filter(empresa =>
+    [empresa.nome_fantasia, empresa.razao_social, ...(empresa.aliases ?? [])].some(nome => {
+      const primeiro = normalizar(nome ?? "").split(" ")[0];
+      return /^[A-Z]{2,3}$/.test(primeiro) && !PALAVRAS_VAZIAS.has(primeiro)
+        && (` ${textoNorm} `.includes(` ${primeiro} `) || ` ${nomeNorm} `.includes(` ${primeiro} `));
+    })
+  );
 
   for (const empresa of candidatas) {
     // 1. CNPJ — o sinal mais forte que existe. Já validado por dígito.
@@ -249,6 +256,33 @@ export function identificarEmpresa(
     }
   }
 
+  // "TL" pode ser o nome curto de mais de um cliente. Isso é uma opção para
+  // perguntar, nunca confirmação. Um CNPJ continua prevalecendo sobre a sigla.
+  const temCnpj = casamentos.some(c => c.forte && c.evidencia.detalhe.startsWith("CNPJ "));
+  if (!temCnpj) {
+    for (const empresa of siglas) {
+      if (!casamentos.some(c => c.empresa.id === empresa.id)) {
+        const noNome = [empresa.nome_fantasia, empresa.razao_social, ...(empresa.aliases ?? [])]
+          .some(nome => {
+            const sigla = normalizar(nome ?? "").split(" ")[0];
+            return /^[A-Z]{2,3}$/.test(sigla) && ` ${nomeNorm} `.includes(` ${sigla} `);
+          });
+        casamentos.push({ empresa, forte: false, evidencia: {
+          campo: "empresa", valor: rotulo(empresa), origem: noNome ? "nome_arquivo" : "conteudo",
+          detalhe: `Sigla compatível com ${empresa.codigo ?? ""}-${empresa.nome_fantasia ?? empresa.razao_social}. Confirme qual empresa é.`,
+        } });
+      }
+    }
+    const ids = new Set(casamentos.map(c => c.empresa.id));
+    if (siglas.length > 0 && ids.size > 1 && casamentos.some(c => c.empresa.codigo && c.empresa.codigo.length <= 3)) {
+      return { confianca: "conflitante", empresa: null, evidencias: casamentos.map(c => c.evidencia),
+        conflitos: [...new Map(casamentos.map(c => [c.empresa.id, {
+          empresaId: c.empresa.id,
+          rotulo: `${c.empresa.codigo ?? ""}-${c.empresa.nome_fantasia ?? c.empresa.razao_social ?? ""}`,
+          motivo: c.evidencia.detalhe,
+        }])).values()] };
+    }
+  }
   const distintas = [...new Map(casamentos.map((c) => [c.empresa.id, c])).values()];
 
   if (distintas.length === 0) {

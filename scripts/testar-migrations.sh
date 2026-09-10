@@ -97,6 +97,19 @@ if [ "$status_testes" -ne 0 ]; then
   falhas=$((falhas+1))
 fi
 
+# Mapa de pastas: arquivo próprio porque a massa dele são empresas com códigos
+# de prefixo colidente, que não devem poluir as demais asserções.
+for extra in teste_mapa_pastas teste_aprendizado; do
+  saida_extra=$(docker exec -i "$CONTAINER" psql -U postgres -d "$DB" -v ON_ERROR_STOP=1                   < "$RAIZ/supabase/testes/$extra.sql" 2>&1)
+  status_extra=$?
+  echo "$saida_extra" | grep -E "OK  |FALHOU|TODOS OS TESTES" | sed 's/^NOTICE:  //'
+  if [ "$status_extra" -ne 0 ]; then
+    vermelho "  asserções de $extra falharam"
+    echo "$saida_extra" | grep -E "^ERROR" | head -5
+    falhas=$((falhas+1))
+  fi
+done
+
 titulo "6. Limpeza"
 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
 verde "  container removido"

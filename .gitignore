@@ -12,6 +12,14 @@
 
 # testing
 /coverage
+/.teste-sql-runtime/
+/supabase/.temp/
+**/__pycache__/
+**/.pytest_cache/
+**/.teste-resumo-temp/
+**/.worker.lock
+**/dados/diario.jsonl
+**/demonstracao-arquivador-*/
 
 # next.js
 /.next/

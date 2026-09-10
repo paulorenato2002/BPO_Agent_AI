@@ -48,7 +48,9 @@ type RespostaPython = {
  */
 function chamarPython(payload: Record<string, unknown>): Promise<RespostaPython> {
   return new Promise((resolve) => {
-    const processo = spawn(PYTHON, ["-m", "arquivador", "json", "--stdin"], {
+    // Executável instalado no PC, usado somente no modo local explícito.
+    // Não incluir o repositório inteiro no pacote da Vercel ao rastreá-lo.
+    const processo = spawn(/* turbopackIgnore: true */ PYTHON, ["-m", "arquivador", "json", "--stdin"], {
       cwd: RAIZ_MINI_SISTEMA,
       windowsHide: true,
     });
@@ -146,6 +148,7 @@ async function entregarNaPastaLocal(dados: {
       competencia: item.competencia.valor,
       instituicao: item.instituicao.valor,
       tipo_documento: item.tipoDocumento.valor,
+      caminho_confirmado: item.caminhoSugerido,
     });
 
     if (!resposta.ok) {

@@ -205,13 +205,19 @@ export function useChat() {
       }
       setMensagens(
         (dados.dados as Array<Record<string, unknown>>)
-          .filter((m) => m.papel === "usuario" || (m.papel === "agente" && m.conteudo))
-          .map((m) => ({
+          .flatMap<Mensagem>((m) => {
+            const historico = (m.metadados as { historicoModelo?: MensagemBackend[] } | undefined)?.historicoModelo;
+            if (m.papel === "agente" && historico?.length) {
+              return historico.map(h => ({ papel: PAPEL_POR_ROLE[h.role ?? "assistant"] ?? "agente",
+                conteudo: h.content ?? null, tool_calls: h.tool_calls, tool_call_id: h.tool_call_id,
+                criadaEm: m.criadaEm as string }));
+            }
+            return [{
             id: m.id as string,
             papel: m.papel as Mensagem["papel"],
             conteudo: m.conteudo as string | null,
             criadaEm: m.criadaEm as string,
-          }))
+          }]; })
       );
     } catch {
       setErro("Falha de rede ao abrir a conversa.");
@@ -276,5 +282,5 @@ function mesclar(atual: Mensagem[], oficial: Mensagem[]): Mensagem[] {
       cursor += 1;
       return extra ? { ...normalizada, ...extra } : normalizada;
     })
-    .filter((m) => m.papel === "usuario" || (m.papel === "agente" && m.conteudo));
+    .filter((m) => m.papel !== "sistema");
 }

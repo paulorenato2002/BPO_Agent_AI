@@ -6,6 +6,8 @@ import { parseArquivo } from "../file-extract";
 import { calcularHashSha256 } from "../documentos/inspecao";
 import { buscarAnexosDoUsuario } from "../repositorios/anexos";
 import { nomePastaClientes } from "./estrutura-fixa";
+import { pastaClienteDoBanco } from "./pasta-cliente-banco";
+import { regraParaPastaExistente } from "./regras-pastas-existentes";
 import type {
   AnexoRegistrado,
   ClassificacaoModelo,
@@ -44,9 +46,11 @@ Regras:
 - tipoDocumento é curto e em maiúsculas (ex.: NOTA_FISCAL, EXTRATO, BOLETO).
 - instituicao só quando o documento for de um banco/adquirente identificável.`;
 
-async function lerConteudo(
-  anexo: AnexoRegistrado
-): Promise<{ texto: string; hashAtual: string }> {
+async function lerConteudo(anexo: AnexoRegistrado): Promise<{
+  texto: string;
+  hashAtual: string;
+  parsed: { tipo: "tabular"; colunas: string[] } | { tipo: "texto"; texto: string };
+}> {
   const buffer = await lerArquivo(anexo.arquivo_id, anexo.nome_original);
 
   // Hash RECALCULADO do conteúdo atual: o arquivo no Storage pode ter sido
@@ -59,7 +63,69 @@ async function lerConteudo(
       ? `${parsed.colunas.join(" | ")}\n${JSON.stringify(parsed.linhas.slice(0, 200))}`
       : parsed.texto;
 
-  return { texto, hashAtual };
+  // O `parsed` segue adiante porque a assinatura de layout de uma planilha é o
+  // conjunto de COLUNAS, e ele se perde quando as linhas viram texto corrido.
+  return {
+    texto,
+    hashAtual,
+    parsed:
+      parsed.tipo === "tabular"
+        ? { tipo: "tabular", colunas: parsed.colunas }
+        : { tipo: "texto", texto: parsed.texto },
+  };
+}
+
+/**
+ * O que já foi confirmado antes para estas chaves.
+ *
+ * Duas leituras por chave primária. Sem rede extra: são as mesmas tabelas que a
+ * confirmação alimenta.
+ */
+async function buscarAprendizado(chaves: { contas: string[]; layouts: string[] }) {
+  const contas = new Map<string, { empresaId: string; conta: string; instituicao: string | null }>();
+  const layouts = new Map<
+    string,
+    { tipoDocumento: string; instituicao: string | null; regraCodigo: string | null }
+  >();
+
+  if (chaves.contas.length) {
+    const { data } = await supabaseAdmin
+      .from("empresa_contas")
+      .select("conta,empresa_id,instituicao")
+      .in("conta", chaves.contas);
+    for (const linha of (data ?? []) as {
+      conta: string;
+      empresa_id: string;
+      instituicao: string | null;
+    }[]) {
+      contas.set(linha.conta, {
+        empresaId: linha.empresa_id,
+        conta: linha.conta,
+        instituicao: linha.instituicao,
+      });
+    }
+  }
+
+  if (chaves.layouts.length) {
+    const { data } = await supabaseAdmin
+      .from("padroes_documento")
+      .select("assinatura,tipo_documento,instituicao,regra_codigo")
+      .in("assinatura", chaves.layouts);
+    for (const linha of (data ?? []) as {
+      assinatura: string;
+      tipo_documento: string;
+      instituicao: string | null;
+      regra_codigo: string | null;
+    }[]) {
+      layouts.set(linha.assinatura, {
+        tipoDocumento: linha.tipo_documento,
+        instituicao: linha.instituicao,
+        regraCodigo: linha.regra_codigo,
+      });
+    }
+  }
+
+  return { contas, layouts };
 }
 
 async function listarEmpresasVisiveis(usuarioId: string): Promise<EmpresaCandidata[]> {
@@ -87,7 +153,8 @@ async function listarRegrasAtivas(): Promise<RegraArquivamento[]> {
     .order("codigo");
 
   if (error) throw new Error(`Falha ao listar regras: ${error.message}`);
-  return (data ?? []) as unknown as RegraArquivamento[];
+  const regras = (data ?? []) as unknown as RegraArquivamento[];
+  return process.env.ARQUIVADOR_ESTRUTURA === "existente" ? regras.map(regraParaPastaExistente) : regras;
 }
 
 async function conversaPertenceAoUsuario(
@@ -258,9 +325,13 @@ export function portasAnalisePadrao(): PortasAnalise {
     conversaPertenceAoUsuario,
     mensagemPertenceAConversa,
     lerConteudo,
+    buscarAprendizado,
     listarEmpresasVisiveis,
     listarRegrasAtivas,
     nomePastaClientes,
+    // Lê o mapa publicado pelo worker. Não toca disco: a análise roda igual
+    // na Vercel e no PC.
+    nomePastaEmpresa: pastaClienteDoBanco,
     buscarDocumentoPorHash,
     propostaPorChaveIdempotencia,
     salvarProposta,

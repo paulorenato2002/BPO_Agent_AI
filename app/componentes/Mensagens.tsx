@@ -51,7 +51,7 @@ export function Mensagens({
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
         {vazio && <EstadoVazio />}
 
-        {mensagens.map((m, i) => (
+        {mensagens.filter(m => m.papel === "usuario" || (m.papel === "agente" && m.conteudo)).map((m, i) => (
           <BlocoMensagem key={m.id ?? i} mensagem={m} onTentarNovamente={onTentarNovamente} />
         ))}
 

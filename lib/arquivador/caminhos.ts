@@ -55,6 +55,8 @@ export type ContextoArquivamento = {
   empresaId?: string | null;
   empresaCodigo?: string | null;
   empresaNome?: string | null;
+  /** Nome exato da pasta já existente, resolvido por código da empresa. */
+  pastaEmpresa?: string | null;
   /**
    * Nome do contêiner onde a pasta da empresa vive
    * (01_CLIENTES_ATIVOS ou 02_CLIENTES_INATIVOS).
@@ -106,6 +108,7 @@ const FORMATO_DATA = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 
 /** Nome da pasta da empresa. Prefere o código curto; cai para o nome. */
 function nomePastaEmpresa(ctx: ContextoArquivamento): string {
+  if (ctx.pastaEmpresa) return sanitizarNomeArquivo(ctx.pastaEmpresa);
   return normalizarSegmento(ctx.empresaCodigo ?? ctx.empresaNome ?? "");
 }
 
@@ -146,7 +149,7 @@ function escopoDoSegmento(
   regra: RegraArquivamento,
   indice: number
 ): EscopoPasta {
-  if (modeloOriginal.includes("{ANO}") || modeloOriginal.includes("{COMPETENCIA}")) {
+  if (modeloOriginal.includes("{ANO}") || modeloOriginal.includes("{COMPETENCIA}") || modeloOriginal.includes("{COMPETENCIA_PASTA}")) {
     return "periodo";
   }
   if (modeloOriginal.includes("{PROJETO}")) return "projeto";
@@ -192,6 +195,7 @@ export function expandirDestino(
   const substituicoes: Record<string, string | null> = {
     ANO: ano,
     COMPETENCIA: ctx.competencia ?? null,
+    COMPETENCIA_PASTA: ctx.competencia ? `${ctx.competencia.slice(5, 7)}.${ano}` : null,
     PROJETO: projeto || null,
   };
 

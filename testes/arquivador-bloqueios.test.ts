@@ -6,6 +6,7 @@ import {
   bloqueadoPorNome,
   bloqueadoPorConteudo,
   EXTENSOES_BLOQUEADAS,
+  redigirSegredos,
 } from "../lib/arquivador/bloqueios";
 
 /**
@@ -72,16 +73,18 @@ describe("bloqueio por nome de credencial", () => {
 });
 
 describe("bloqueio por conteúdo", () => {
-  test("senha colada em txt é detectada", () => {
-    const r = bloqueadoPorConteudo("Acesso ao portal\nusuario: joao\nsenha: exemplo-fake-123");
-    assert.equal(r.bloqueado, true);
-    assert.equal(r.bloqueado && r.categoria, "conteudo");
+  test("rótulo léxico NÃO bloqueia — é tarjado depois", () => {
+    // A política mudou de propósito. "senha:" e "api_key=" dão falso positivo
+    // demais em documento financeiro: um extrato real trazia a senha do boleto
+    // na coluna de observações e era recusado inteiro. Em vez de perder o
+    // documento, o VALOR é tarjado antes de qualquer coisa ir ao modelo.
+    assert.equal(bloqueadoPorConteudo("usuario: joao\nsenha: exemplo-fake-123").bloqueado, false);
+    assert.equal(bloqueadoPorConteudo("api_key = valor-ficticio-aqui").bloqueado, false);
+    assert.equal(bloqueadoPorConteudo("secret: nao-e-real").bloqueado, false);
   });
 
-  test("token e api key são detectados", () => {
-    assert.equal(bloqueadoPorConteudo("api_key = valor-ficticio-aqui").bloqueado, true);
-    assert.equal(bloqueadoPorConteudo("Authorization: Bearer abc.def.ghi").bloqueado, true);
-    assert.equal(bloqueadoPorConteudo("secret: nao-e-real").bloqueado, true);
+  test("token Bearer continua bloqueando: o formato é inconfundível", () => {
+    assert.equal(bloqueadoPorConteudo("Authorization: Bearer abc.def.ghi.jkl").bloqueado, true);
   });
 
   test("chave privada PEM colada no texto é detectada", () => {
@@ -143,9 +146,47 @@ describe("verificarBloqueio — barreira completa", () => {
     assert.equal(r.bloqueado && r.categoria, "extensao");
   });
 
-  test("nome ok + conteúdo com segredo é bloqueado pelo conteúdo", () => {
-    const r = verificarBloqueio("anotacoes.txt", "senha: fake-123");
+  test("nome ok + segredo ESTRUTURAL é bloqueado pelo conteúdo", () => {
+    const r = verificarBloqueio("anotacoes.txt", "chave sk-abcdefghijklmnop123456");
     assert.equal(r.bloqueado, true);
     assert.equal(r.bloqueado && r.categoria, "conteudo");
+  });
+});
+
+describe("tarja de rótulos léxicos", () => {
+  test("o extrato com senha de boleto passa, sem o valor", () => {
+    // Caso real: coluna "Observações" de um extrato financeiro trazia
+    // "SENHA : 50936" — a senha do boleto. O documento inteiro era recusado.
+    const linha = '{"Descrição":"Conta de internet","Observações":"SENHA : 50936"}';
+    assert.equal(bloqueadoPorConteudo(linha).bloqueado, false);
+
+    const { texto, redigidos } = redigirSegredos(linha);
+    assert.equal(redigidos, 1);
+    assert.ok(!texto.includes("50936"), "o valor não pode sobreviver à tarja");
+    assert.ok(texto.includes("SENHA"), "o rótulo fica: ajuda a classificar");
+  });
+
+  test("tarja todas as ocorrências, não só a primeira", () => {
+    const { texto, redigidos } = redigirSegredos(
+      ["senha: aaa1", "senha: bbb2", "token: ccc3"].join("\n")
+    );
+    assert.equal(redigidos, 3);
+    assert.ok(!texto.includes("aaa1"));
+    assert.ok(!texto.includes("bbb2"));
+    assert.ok(!texto.includes("ccc3"));
+  });
+
+  test("chamadas seguidas não pulam ocorrências", () => {
+    // Regex global guarda `lastIndex`. Se ele vazasse entre chamadas, a
+    // segunda tarja começaria no meio do texto e deixaria segredo passar.
+    const entrada = "senha: zzz9";
+    for (let i = 0; i < 3; i++) {
+      assert.equal(redigirSegredos(entrada).redigidos, 1, `chamada ${i + 1}`);
+    }
+  });
+
+  test("documento que só FALA de senha não é tarjado", () => {
+    const texto = "A política exige troca de senha a cada 90 dias.";
+    assert.equal(redigirSegredos(texto).redigidos, 0);
   });
 });

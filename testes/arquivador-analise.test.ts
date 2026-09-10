@@ -100,6 +100,11 @@ function montar(opcoes: {
   propostaAnterior?: PropostaGerada | null;
   donoDaConversa?: boolean;
   mensagemDaConversa?: boolean;
+  /** Conta -> empresa e layout -> tipo já confirmados antes. */
+  aprendizado?: {
+    contas?: Record<string, { empresaId: string; instituicao?: string | null }>;
+    layouts?: Record<string, { tipoDocumento: string; instituicao?: string | null }>;
+  };
 } = {}): Cenario {
   const {
     anexos = [anexo()],
@@ -111,6 +116,7 @@ function montar(opcoes: {
     propostaAnterior = null,
     donoDaConversa = true,
     mensagemDaConversa = true,
+    aprendizado,
   } = opcoes;
 
   const salvas: Cenario["salvas"] = [];
@@ -163,6 +169,41 @@ function montar(opcoes: {
       vistosPeloModelo.push({ nomeArquivo: pedido.nomeArquivo, texto: pedido.texto });
       return classificacao(pedido.nomeArquivo);
     },
+    ...(aprendizado
+      ? {
+          async buscarAprendizado(chaves: { contas: string[]; layouts: string[] }) {
+            const contas = new Map<
+              string,
+              { empresaId: string; conta: string; instituicao: string | null }
+            >();
+            for (const conta of chaves.contas) {
+              const achado = aprendizado.contas?.[conta];
+              if (achado) {
+                contas.set(conta, {
+                  empresaId: achado.empresaId,
+                  conta,
+                  instituicao: achado.instituicao ?? null,
+                });
+              }
+            }
+            const layouts = new Map<
+              string,
+              { tipoDocumento: string; instituicao: string | null; regraCodigo: string | null }
+            >();
+            for (const layout of chaves.layouts) {
+              const achado = aprendizado.layouts?.[layout];
+              if (achado) {
+                layouts.set(layout, {
+                  tipoDocumento: achado.tipoDocumento,
+                  instituicao: achado.instituicao ?? null,
+                  regraCodigo: null,
+                });
+              }
+            }
+            return { contas, layouts };
+          },
+        }
+      : {}),
   };
 
   return { portas, salvas, vistosPeloModelo };
@@ -367,13 +408,39 @@ describe("bloqueios", () => {
   test("segredo no conteúdo bloqueia ANTES de o modelo ver", async () => {
     const c = montar({
       anexos: [anexo({ nome_original: "acessos.txt", extensao: "txt" })],
-      conteudos: { "anexo-1": "portal do cliente\nsenha: fake-123" },
+      // Segredo ESTRUTURAL: o formato é inconfundível, então o arquivo inteiro
+      // é recusado. Rótulo léxico ("senha: x") tem tratamento diferente — ver
+      // o teste logo abaixo.
+      conteudos: { "anexo-1": "portal do cliente\nsk-abcdefghijklmnop123456" },
     });
     const r = await analisarDocumentos({ anexoIds: ["anexo-1"] }, USUARIO, c.portas);
 
     assert.ok(r.ok);
     assert.equal(r.proposta.itens[0].status, "bloqueado");
     assert.equal(c.vistosPeloModelo.length, 0, "o texto com segredo chegou ao modelo");
+  });
+
+  test("senha de boleto é tarjada, e o documento segue para o modelo", async () => {
+    // Caso real: extrato financeiro com "SENHA : 50936" na coluna de
+    // observações. Recusar perdia o extrato inteiro por causa de cinco
+    // dígitos que nem são credencial.
+    const c = montar({
+      anexos: [anexo({ nome_original: "extrato.csv", extensao: "csv" })],
+      conteudos: { "anexo-1": 'Descrição,Observações\nConta de internet,"SENHA : 50936"' },
+    });
+    const r = await analisarDocumentos({ anexoIds: ["anexo-1"] }, USUARIO, c.portas);
+
+    assert.ok(r.ok);
+    assert.notEqual(r.proposta.itens[0].status, "bloqueado");
+    assert.equal(c.vistosPeloModelo.length, 1, "o documento deveria chegar ao modelo");
+    assert.ok(
+      !c.vistosPeloModelo[0].texto.includes("50936"),
+      "o valor da senha não pode chegar ao modelo"
+    );
+    assert.ok(
+      c.vistosPeloModelo[0].texto.includes("SENHA"),
+      "o rótulo fica: ajuda o modelo a entender a linha"
+    );
   });
 
   test("um arquivo bloqueado não derruba o lote inteiro", async () => {
@@ -635,5 +702,82 @@ describe("correções do usuário", () => {
     assert.ok(r.ok);
     assert.equal(r.proposta.itens[0].competencia.valor, "2026-09", "a1 não podia ser afetado");
     assert.equal(r.proposta.itens[1].competencia.valor, "2026-01");
+  });
+});
+
+describe("aprendizado — parar de perguntar a mesma coisa", () => {
+  // Extrato em que os códigos de DOIS clientes aparecem no texto. Foi o caso
+  // real que motivou tudo: os números "147" e "210" apareciam como valores no
+  // meio dos lançamentos e o documento era recusado por ambiguidade.
+  const EXTRATO_AMBIGUO = `EXTRATO DE CONTA CORRENTE
+Cooperativa: 5004-0
+Conta: 1.136.082-8
+Periodo: 01/09/2026 - 30/09/2026
+Lancamentos
+PIX RECEBIDO ALF valor 100,00
+PIX EMITIDO BET valor 250,00`;
+
+  test("sem aprendizado, dois clientes no texto viram conflito", async () => {
+    const c = montar({ conteudos: { "anexo-1": EXTRATO_AMBIGUO } });
+    const r = await analisarDocumentos({ anexoIds: ["anexo-1"] }, USUARIO, c.portas);
+
+    assert.ok(r.ok);
+    const item = r.proposta.itens[0];
+    assert.equal(item.empresa.confianca, "conflitante");
+    assert.equal(item.empresa.empresaId, null, "não pode escolher um dos dois");
+  });
+
+  test("a conta já confirmada desfaz o conflito", async () => {
+    // É o ganho principal: a conta identifica o titular, e não coincide com um
+    // número solto no meio dos lançamentos.
+    const c = montar({
+      conteudos: { "anexo-1": EXTRATO_AMBIGUO },
+      aprendizado: { contas: { "11360828": { empresaId: ALFA.id, instituicao: "SICOOB" } } },
+    });
+    const r = await analisarDocumentos({ anexoIds: ["anexo-1"] }, USUARIO, c.portas);
+
+    assert.ok(r.ok);
+    const item = r.proposta.itens[0];
+    assert.equal(item.empresa.confianca, "confirmado");
+    assert.equal(item.empresa.empresaId, ALFA.id);
+    assert.equal(item.conflitos.length, 0);
+    assert.ok(
+      item.evidencias.some((e) => /Conta 11360828/.test(e.detalhe)),
+      "a evidência precisa dizer que veio da conta cadastrada"
+    );
+  });
+
+  test("conta cadastrada discordando do CNPJ do documento vira conflito", async () => {
+    // Dois sinais fortes discordando. Escolher um em silêncio é o pior
+    // resultado: um está errado e ninguém vai conferir.
+    const c = montar({
+      conteudos: { "anexo-1": `${NOTA_ALFA}\nConta: 1.136.082-8` },
+      aprendizado: { contas: { "11360828": { empresaId: BETA.id } } },
+    });
+    const r = await analisarDocumentos({ anexoIds: ["anexo-1"] }, USUARIO, c.portas);
+
+    assert.ok(r.ok);
+    const item = r.proposta.itens[0];
+    assert.equal(item.empresa.empresaId, null);
+    assert.ok(item.conflitos.some((cf) => cf.campo === "empresa"));
+  });
+
+  test("as assinaturas viajam na proposta, para a confirmação poder aprender", async () => {
+    const c = montar({ conteudos: { "anexo-1": EXTRATO_AMBIGUO } });
+    const r = await analisarDocumentos({ anexoIds: ["anexo-1"] }, USUARIO, c.portas);
+
+    assert.ok(r.ok);
+    assert.equal(r.proposta.itens[0].assinaturas?.conta, "11360828");
+    assert.ok(r.proposta.itens[0].assinaturas?.layout, "layout deveria ter assinatura");
+  });
+
+  test("sem a porta de aprendizado, tudo continua funcionando", async () => {
+    // A porta é opcional: sem ela o sistema volta a perguntar todo mês, que é
+    // o comportamento antigo — não um erro.
+    const c = montar({ conteudos: { "anexo-1": NOTA_ALFA } });
+    const r = await analisarDocumentos({ anexoIds: ["anexo-1"] }, USUARIO, c.portas);
+
+    assert.ok(r.ok);
+    assert.equal(r.proposta.itens[0].empresa.empresaId, ALFA.id);
   });
 });
