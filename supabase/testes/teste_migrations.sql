@@ -925,25 +925,33 @@ do $$
 declare erro boolean := false;
 begin
   insert into public.documentos_operacionais
-    (empresa_id, nome_original, hash_sha256, caminho_logico, versao)
-  values ('22222222-2222-2222-2222-222222222222', 'relatorio.pdf',
-          repeat('b', 64), '/EMPRESA/2026/2026-09/RELATORIO', 1);
+    (empresa_id, nome_original, nome_final, hash_sha256, caminho_logico, versao)
+  values ('22222222-2222-2222-2222-222222222222', 'relatorio.pdf', 'REL_2026-09_v1.pdf',
+          repeat('b', 64), '/EMPRESA/2026/2026-09', 1);
+
+  -- A pasta da competência é PLANA: vários documentos convivem nela, todos
+  -- com versao = 1. O que não pode repetir é o NOME.
+  insert into public.documentos_operacionais
+    (empresa_id, nome_original, nome_final, hash_sha256, caminho_logico, versao)
+  values ('22222222-2222-2222-2222-222222222222', 'nota.pdf', 'NF_2026-09_v1.pdf',
+          repeat('d', 64), '/EMPRESA/2026/2026-09', 1);
+  perform pg_temp.checar('documentos diferentes convivem na mesma pasta e versão', true);
 
   begin
     insert into public.documentos_operacionais
-      (empresa_id, nome_original, hash_sha256, caminho_logico, versao)
-    values ('22222222-2222-2222-2222-222222222222', 'outro.pdf',
-            repeat('c', 64), '/EMPRESA/2026/2026-09/RELATORIO', 1);
+      (empresa_id, nome_original, nome_final, hash_sha256, caminho_logico, versao)
+    values ('22222222-2222-2222-2222-222222222222', 'outro.pdf', 'REL_2026-09_v1.pdf',
+            repeat('c', 64), '/EMPRESA/2026/2026-09', 1);
   exception when unique_violation then erro := true;
   end;
-  perform pg_temp.checar('duas versões v1 do mesmo caminho lógico é bloqueado', erro);
+  perform pg_temp.checar('mesmo nome na mesma pasta é bloqueado', erro);
 
-  -- v2 do mesmo caminho é permitido.
+  -- A versão nova tem NOME novo, então convive com a anterior.
   insert into public.documentos_operacionais
-    (empresa_id, nome_original, hash_sha256, caminho_logico, versao)
-  values ('22222222-2222-2222-2222-222222222222', 'relatorio.pdf',
-          repeat('d', 64), '/EMPRESA/2026/2026-09/RELATORIO', 2);
-  perform pg_temp.checar('nova versão do mesmo caminho é permitida', true);
+    (empresa_id, nome_original, nome_final, hash_sha256, caminho_logico, versao)
+  values ('22222222-2222-2222-2222-222222222222', 'relatorio.pdf', 'REL_2026-09_v2.pdf',
+          repeat('e', 64), '/EMPRESA/2026/2026-09', 2);
+  perform pg_temp.checar('nova versão convive com a anterior', true);
 end $$;
 
 -- Proposta confirmada exige quem confirmou.
