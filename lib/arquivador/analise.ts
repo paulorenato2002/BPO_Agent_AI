@@ -617,7 +617,15 @@ async function analisarUm(
       item.possivelDuplicata = {
         documentoId: jaExiste.id,
         nome: jaExiste.nome,
-        motivo: "Já existe documento com este conteúdo (mesmo SHA-256) para esta empresa.",
+        // Esta análise roda na Vercel, que não tem a pasta montada: daqui só
+        // dá para ver o REGISTRO, nunca o arquivo. Afirmar "já está arquivado"
+        // seria afirmar o que não se sabe — o arquivo pode ter sido apagado da
+        // pasta e o registro ter sobrevivido. Quem confere é o worker, que tem
+        // o disco; se o arquivo sumiu, ele aposenta o registro e arquiva.
+        motivo:
+          "Existe registro de documento com este mesmo conteúdo (SHA-256) para esta " +
+          "empresa. Se o arquivo ainda estiver na pasta, arquivar de novo não duplica; " +
+          "se tiver sido apagado de lá, o arquivamento refaz o registro.",
       };
     }
   }

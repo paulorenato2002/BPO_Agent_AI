@@ -25,12 +25,23 @@ def pedido():
 
 
 class API:
-    def __init__(self):
+    def __init__(self, registrado=None):
         self.chamadas = 0
+        # O que o banco diz sobre este conteudo: None = nunca arquivado.
+        self.registrado = registrado
+        self.aposentados = []
 
     def baixar(self, payload, destino):
         self.chamadas += 1
         destino.write_bytes(b"documento ficticio")
+
+    def rpc(self, nome, dados):
+        if nome == "localizacao_registrada":
+            return [self.registrado] if self.registrado else []
+        if nome == "aposentar_documento_orfao":
+            self.aposentados.append(dados)
+            return None
+        raise AssertionError(f"rpc inesperada: {nome}")
 
 
 def test_worker_copia_original_e_retomada_nao_duplica(tmp_path):
@@ -79,3 +90,51 @@ def test_download_preserva_bytes(tmp_path):
     destino = tmp_path / "download"
     api.baixar(pedido()["payload"], destino)
     assert destino.read_bytes() == b"documento ficticio"
+
+
+def test_registro_orfao_e_aposentado_e_o_arquivo_volta(tmp_path):
+    """Apagar o arquivo do destino nao pode travar o rearquivamento.
+
+    O indice unico (empresa_id, hash_sha256) where ativo segura o conteudo
+    enquanto a linha existe. Se o arquivo sumiu do disco, a linha esta
+    mentindo — e so o worker, que tem a pasta montada, consegue saber.
+    """
+    raiz = tmp_path / "destino"
+    raiz.mkdir()
+    config = SimpleNamespace(raiz=raiz, diario=None)
+
+    # O banco jura que ja esta arquivado, num caminho que nao existe.
+    sumido = str(tmp_path / "apagado_pelo_usuario.txt")
+    api = API(registrado={"documento_id": "doc-1", "caminho_final": sumido,
+                          "nome_final": "apagado_pelo_usuario.txt"})
+
+    resultado = executar_item(pedido(), api, config)
+
+    assert len(api.aposentados) == 1, "o registro orfao precisava ser aposentado"
+    assert api.aposentados[0]["p_documento"] == "doc-1"
+    assert "nao encontrado" in api.aposentados[0]["p_motivo"].lower().replace("ã", "a")
+    assert resultado["status"] == "arquivado", "o arquivo tinha de voltar para a pasta"
+
+
+def test_arquivo_presente_no_disco_nao_e_aposentado(tmp_path):
+    """Duplicata de verdade continua sendo duplicata. Nada e aposentado."""
+    raiz = tmp_path / "destino"
+    raiz.mkdir()
+    config = SimpleNamespace(raiz=raiz, diario=None)
+
+    presente = tmp_path / "ainda_esta_la.txt"
+    presente.write_bytes(b"documento ficticio")
+    api = API(registrado={"documento_id": "doc-1", "caminho_final": str(presente),
+                          "nome_final": presente.name})
+
+    executar_item(pedido(), api, config)
+
+    assert api.aposentados == [], "arquivo presente nao pode ser aposentado"
+
+
+def test_sem_registro_anterior_nao_chama_aposentadoria(tmp_path):
+    raiz = tmp_path / "destino"
+    raiz.mkdir()
+    api = API()
+    executar_item(pedido(), api, SimpleNamespace(raiz=raiz, diario=None))
+    assert api.aposentados == []

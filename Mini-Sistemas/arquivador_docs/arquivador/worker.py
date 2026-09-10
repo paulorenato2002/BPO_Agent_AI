@@ -21,6 +21,55 @@ from .config import RAIZ_PROJETO, carregar_config, carregar_env, regra_para_past
 from .pasta_cliente import resolver_pasta_cliente
 
 
+def conferir_registro_orfao(payload: dict, item: dict, api) -> None:
+    """
+    O banco acha que este conteúdo já está arquivado. Confere no disco.
+
+    POR QUE ISTO MORA AQUI E NÃO NO BANCO
+    -------------------------------------
+    `documentos_operacionais` tem índice único em (empresa_id, hash_sha256)
+    where ativo. Enquanto a linha existe, o mesmo conteúdo não pode ser
+    arquivado de novo para a mesma empresa. Isso está certo enquanto o arquivo
+    ESTÁ na pasta — e vira uma trava sem saída quando alguém o apaga: o
+    registro sobrevive, e `concluir_arquivamento` recusa com "já registrado em
+    outro caminho".
+
+    Só quem tem o disco montado pode desempatar. O Postgres roda no Supabase e
+    a Vercel não tem a pasta; este worker tem. Então a checagem é feita aqui, e
+    o banco decide com um fato observado em vez de uma suposição.
+
+    Arquivo presente: nada muda, e a duplicata continua sendo recusada mais
+    adiante — como deve. Arquivo ausente: o registro estava mentindo, é
+    aposentado (não apagado) e o caminho fica livre para arquivar de novo.
+    """
+    empresa_id = (item.get("empresa") or {}).get("empresaId")
+    hash_conteudo = payload.get("hash_sha256")
+    if not empresa_id or not hash_conteudo:
+        return
+
+    registros = api.rpc("localizacao_registrada", {"p_empresa": empresa_id, "p_hash": hash_conteudo})
+    if not registros:
+        return
+
+    registro = registros[0]
+    caminho = registro.get("caminho_final")
+    if not caminho:
+        return
+
+    if Path(caminho).is_file():
+        return  # Duplicata de verdade. Quem recusa é o banco, mais adiante.
+
+    api.rpc("aposentar_documento_orfao", {
+        "p_documento": registro["documento_id"],
+        "p_motivo": f"Arquivo não encontrado no destino gravado ({caminho}).",
+    })
+    print(
+        f"  registro órfão aposentado: {registro.get('nome_final') or caminho}"
+        " — o arquivo não estava mais na pasta.",
+        flush=True,
+    )
+
+
 def executar_item(trabalho: dict, api, config) -> dict:
     payload = trabalho["payload"]
     item = payload["item"]
@@ -39,6 +88,8 @@ def executar_item(trabalho: dict, api, config) -> dict:
     # Não entrega em um destino diferente daquele apresentado ao colaborador.
     if f"{destino.caminho_relativo}/{nome}" != item["caminhoSugerido"]:
         raise ErroItem("A regra ou o nome da empresa mudou. Refaça a análise para conferir o destino.")
+
+    conferir_registro_orfao(payload, item, api)
     with tempfile.TemporaryDirectory(prefix="bpo-download-") as temporario:
         # Nome de usuário nunca vira caminho temporário.
         origem = Path(temporario) / "documento.bin"
