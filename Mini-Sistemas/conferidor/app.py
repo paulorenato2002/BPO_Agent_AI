@@ -10,12 +10,12 @@ from time import perf_counter
 
 import streamlit as st
 
-from conferencia import conferir_tres, nome_no_banco, fornecedores_proprios
-from core import brl, conferir, ler_pdf, serializar
+from conferencia import nome_no_banco, fornecedores_proprios
+from core import brl, conferir, serializar
+from lote import TIPOS_BANCO, conferir_lote, ler_relacoes
 from mensagem import mensagem_whatsapp, pendencias_antes_de_enviar
 
 ROOT = Path(__file__).resolve().parent
-TIPOS_BANCO = ["itau", "sicoob"]
 
 st.set_page_config(page_title="Conferimento de agendamentos", page_icon="✓", layout="wide")
 st.title("Conferimento de agendamentos")
@@ -53,46 +53,20 @@ if st.session_state.get("assinatura") != assinatura:
     st.session_state.pop("resultado", None)
 
 if executar:
-    relacoes, invalidas = {}, []
-    for linha in relacoes_txt.splitlines():
-        if not linha.strip():
-            continue
-        if "=" not in linha or not all(p.strip() for p in linha.split("=", 1)):
-            invalidas.append(linha)
-        else:
-            a, b = linha.split("=", 1)
-            relacoes[a.strip()] = b.strip()
+    relacoes, invalidas = ler_relacoes(relacoes_txt)
     if invalidas:
         st.error("Relação inválida. Use: nome no contas a pagar = nome no banco, uma por linha.")
     elif not fontes:
         st.error("Selecione os arquivos para começar.")
     else:
         inicio = perf_counter()
-        docs, erros = [], []
         with st.spinner("Lendo os PDFs, validando totais e conferindo..."):
-            for nome, dados in fontes:
-                try:
-                    docs.append(ler_pdf(nome, dados))
-                except Exception as exc:
-                    erros.append(f"{nome}: leitura interrompida ({type(exc).__name__}). Verifique o PDF.")
-            contas = [d for d in docs if d.tipo == "contas"]
-            bancos = [d for d in docs if d.tipo in TIPOS_BANCO]
-            folhas = [d for d in docs if d.tipo == "folha"]
-            desconhecidos = [d.arquivo for d in docs if d.tipo == "desconhecido"]
-            if desconhecidos:
-                erros.append("Layout não reconhecido: " + ", ".join(desconhecidos) + ".")
-            if len(contas) != 1 or len(bancos) > 1 or len(folhas) > 1 or not (bancos or folhas):
-                erros.append("Envie um contas a pagar e, da mesma empresa, os agendamentos do banco, o extrato da folha ou os dois.")
-            if len({d.hash for d in docs}) != len(docs):
-                erros.append("Arquivo repetido no lote.")
-            if len({d.cnpj for d in docs if d.cnpj}) > 1:
-                erros.append("Os arquivos são de CNPJs diferentes. Separe as empresas.")
-            if any(not d.integro for d in docs):
-                erros.append("Leitura incompleta ou total que não fecha: conferência bloqueada. Veja a aba Dados e evidências.")
-            relatorio, detalhes = None, {}
-            if not erros:
-                banco, folha = (bancos or [None])[0], (folhas or [None])[0]
-                relatorio = conferir_tres(contas[0], banco, folha, relacoes, observacoes=observacoes)
+            lote = conferir_lote(fontes, relacoes, observacoes)
+            docs, erros, relatorio, detalhes = lote.docs, lote.erros, lote.relatorio, {}
+            if relatorio:
+                contas = [d for d in docs if d.tipo == "contas"]
+                banco = next((d for d in docs if d.tipo in TIPOS_BANCO), None)
+                folha = next((d for d in docs if d.tipo == "folha"), None)
                 proprios = fornecedores_proprios(contas[0].itens)
                 pelo_favorecido = replace(contas[0], itens=[replace(i, nome=nome_no_banco(i, proprios)) for i in contas[0].itens])
                 if banco:

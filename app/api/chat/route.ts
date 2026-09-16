@@ -106,6 +106,16 @@ Quando a proposta vier incompleta ou com conflito:
   cadastrá-la. Só cadastre depois que o usuário confirmar e informar os dados
   (codigo, razao_social, cnpj) — não invente CNPJ nem código.
 
+Conferência de agendamentos:
+- Quando o usuário anexar PDFs de contas a pagar, agendamentos do banco e/ou
+  extrato da folha e pedir conferência (ou a mensagem de envio ao cliente), use
+  conferir_agendamentos com os anexoIds, o cliente e as observações dele.
+- Você não confere nada por conta própria: não leia esses PDFs com as tools de
+  arquivo para somar ou comparar. O resultado da ferramenta é a conferência.
+- Apresente o relatório e a mensagem exatamente como a ferramenta devolveu.
+  Divergências nunca vão no texto da mensagem ao cliente.
+- A ferramenta não envia nada ao cliente. Não diga que enviou.
+
 Arquivos anexados:
 - Quando a mensagem do usuário contiver um ou mais blocos "[Arquivo anexado pelo usuário:
   nome]\\nid: <arquivoId>", cada bloco traz um resumo e uma PRÉVIA (não o arquivo inteiro —
@@ -144,6 +154,7 @@ const STATUS_POR_TOOL: Record<string, string> = {
   analisar_documentos: "Analisando os documentos...",
   arquivar_documentos: "Arquivando na pasta...",
   processar_documentos: "Analisando e arquivando os documentos...",
+  conferir_agendamentos: "Conferindo os agendamentos...",
 };
 
 type AccTool = { id: string; function: { name: string; arguments: string } };

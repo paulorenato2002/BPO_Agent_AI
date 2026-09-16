@@ -107,10 +107,17 @@ que os testes cobram delas. Sem essa pasta, os testes com amostras são pulados.
 
 ## Integração com o agente
 
-`core.ler_pdf(nome, bytes)` → `Documento`.
-`conferencia.conferir_tres(contas, banco, folha, relacoes, aceitar_data_sicoob, observacoes)`
-→ `Relatorio`, com `.markdown()` pronto para a conversa, e
-`mensagem.mensagem_whatsapp(relatorio, cliente)` → texto para o cliente. Quando
-for para o agente, o modelo da mensagem passa a vir do banco. Antes de expor ao
-agente: escopo por empresa, autenticação, limites de execução e onde o
-resultado fica guardado.
+O chat chama a ferramenta `conferir_agendamentos`
+(`lib/ferramentas/conferimento.ts`). Ela confere que os anexos são do usuário,
+não bloqueados e em PDF, e chama `python cli.py json --stdin` nesta pasta:
+
+- entrada: `{"arquivos": [{"nome", "base64"}], "cliente", "observacoes", "relacoes"}`;
+- saída: `{ok, erros, documentos, divergencias, avisos, relatorio_markdown,
+  pendencias_antes_de_enviar, mensagem_whatsapp}` — JSON até em erro.
+
+Tela e agente usam o mesmo `lote.conferir_lote`, com as mesmas regras de
+bloqueio. Nada é gravado; a mensagem não é enviada ao cliente.
+
+Só roda onde há Python com as dependências (hoje, o ambiente local). O
+executável vem de `CONFERIDOR_PYTHON`, depois `ARQUIVADOR_PYTHON`, depois
+`python`. O modelo da mensagem ainda é o arquivo em `modelos/`.

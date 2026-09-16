@@ -1,5 +1,16 @@
 # Validação
 
+## 16/09/2026 — ligação com o agente (v0.4)
+
+- Python: **50 testes aprovados** (8 novos da entrada JSON: lote vazio, limite
+  de arquivos, base64 inválido, arquivo que não é PDF, relação inválida,
+  entrada quebrada e as três amostras pelo processo).
+- Agente: 12 testes novos da ferramenta (contrato, validação, anexo de outro
+  usuário, bloqueado, planilha, ordem e conteúdo enviados); suíte com 274
+  aprovados e typecheck limpo.
+- Ponte Node → Python com as amostras: 1, 1 e 2 divergências, como esperado,
+  em 1 a 4 s por empresa.
+
 ## 16/09/2026 — descrição, observações e mensagem (v0.3)
 
 Comando: `python -m pytest -q -p no:cacheprovider`. Resultado: **42 testes aprovados**.

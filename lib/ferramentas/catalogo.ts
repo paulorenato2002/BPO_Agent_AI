@@ -2,6 +2,7 @@ import "server-only";
 import { registroFerramentas } from "./registro";
 import { ferramentaAnalisarDocumentos, ferramentaArquivarDocumentos, ferramentaProcessarDocumentos } from "./arquivador";
 import { ferramentaLinkPainel } from "./painel";
+import { ferramentaConferirAgendamentos } from "./conferimento";
 
 /**
  * Catálogo de ferramentas de negócio.
@@ -23,6 +24,7 @@ export function registrarFerramentasDeNegocio(): typeof registroFerramentas {
   registroFerramentas.registrar(ferramentaArquivarDocumentos);
   registroFerramentas.registrar(ferramentaProcessarDocumentos);
   registroFerramentas.registrar(ferramentaLinkPainel);
+  registroFerramentas.registrar(ferramentaConferirAgendamentos);
 
   registrado = true;
   return registroFerramentas;
