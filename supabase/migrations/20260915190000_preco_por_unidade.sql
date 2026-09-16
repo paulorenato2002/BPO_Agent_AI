@@ -3,8 +3,8 @@
 --
 -- O banco calculava o preço de um serviço de três jeitos: valor fixo mensal,
 -- tempo fixo mensal e tempo por unidade (minutos × custo da equipe). A Effective
--- cobra parte dos serviços por quantidade em reais: R$ 1,00 por pagamento,
--- R$ 50 por banco, R$ 0,50 por nota fiscal (planilha NOVA PRECIFICAÇÃO).
+-- cobra parte dos serviços por quantidade em reais: um valor por pagamento, por
+-- banco, por nota fiscal.
 --
 -- Converter esses valores em minutos exigiria o custo da equipe, que ainda não
 -- está definido, e mudaria o preço praticado. Este método guarda o preço como

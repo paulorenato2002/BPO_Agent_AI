@@ -1,0 +1,42 @@
+{
+ "_sobre": "Modelo com dados fictícios. O arquivo real fica em infos_e_backup/decisoes/importacao.json, fora do git.",
+ "codigo_effective": "999",
+ "planilha_precificacao": "C:\\caminho\\para\\PRECIFICACAO.xlsx",
+ "correcoes_contato": {
+  "101:fulana": {"nome": "Fulana de Tal"},
+  "102:beltrana": {"nome": "Beltrana Souza", "cpf": null},
+  "103:ciclano": {"tipo_vinculo": "gestor", "cargo": "Gerente"}
+ },
+ "grupos_whatsapp": [
+  {"codigo": "101", "nome": "Effective - Cliente Exemplo", "principal": true, "finalidade": "Canal principal da Effective com o cliente."},
+  {"codigo": "101", "nome": "Sócia / Effective", "principal": false, "finalidade": "Grupo da sócia com a equipe.",
+   "observacoes": "Mesmo grupo registrado também em 102.", "participantes": [["101", "Fulana de Tal", "Sócia"]]}
+ ],
+ "planos": [
+  {"codigo_atual": "BASICO", "codigo": "BASIC", "nome": "Basic", "nivel": 1, "descricao": "Descrição do plano."}
+ ],
+ "contratos": [
+  {"codigo": "101", "plano": "BASIC", "valor": 100.0, "inicio": "2026-01-01", "dia": 10, "forma": "boleto",
+   "reajuste": null, "proximo_reajuste": null, "numero": null, "obs": "Origem da data e do valor."}
+ ],
+ "catalogo_servicos": [
+  {"codigo": "CON_BANCARIA", "nome": "Conciliação bancária diária", "cat": "conciliacao", "plano": "BASIC",
+   "requisito": "QUANTOS BANCOS?", "aliases": ["Conciliação bancária diária/semanal"], "freq": "diaria"}
+ ],
+ "servicos_descartados": ["Nome de serviço da planilha que não entra no catálogo"],
+ "descricao_planos": {"BASIC": "Descrição do plano."},
+ "categoria_servico_no_banco": {"CON_BANCARIA": "controladoria"},
+ "modelos_precificacao": [
+  {"plano": "BASIC", "margem": 30, "gatilho": "acima de R$ X, sugerir o plano seguinte"}
+ ],
+ "parametros_precificacao": {
+  "versao": "AAAA.MM", "aliquota_impostos_percentual": 6, "desconto_maximo_percentual": 10, "valor_minimo_mensal_padrao": 0,
+  "observacao_base": "Como o preço é calculado.", "observacao_final": " Observações sobre desconto e piso."
+ },
+ "regras_valor_fixo": {
+  "BASIC": [["CON_BANCARIA", "", "Nome da atividade", 10, null]]
+ },
+ "regras_por_unidade": {
+  "BASIC": [["CON_BANCARIA", "banco", 10]]
+ }
+}
