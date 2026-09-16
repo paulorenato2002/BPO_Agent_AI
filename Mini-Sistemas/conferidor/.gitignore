@@ -1,0 +1,8 @@
+docs_amostra/
+dados/
+.venv/
+__pycache__/
+.pytest_cache/
+pytest-cache-files-*/
+*.log
+*.pid
