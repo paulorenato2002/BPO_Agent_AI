@@ -83,6 +83,11 @@ def nome_no_banco(item: Item, proprios: set[str]) -> str:
     return fornecedor or pessoa_da_descricao(item)
 
 
+def descricao_limpa(item: Item) -> str:
+    """Descrição sem o número da parcela ("9/12 - ")."""
+    return re.sub(r"^\s*\d+\s*/\s*\d+\s*-\s*", "", item.descricao or "").strip()
+
+
 def nome_do_banco(item: Item) -> str:
     return item.nome or item.descricao        # boletos do Sicoob trazem o nome na observação
 
@@ -104,6 +109,7 @@ class Ref:
     item: Item
     nome: str
     documento: str = ""
+    descricao: str = ""
 
     def __post_init__(self):
         self.documento = self.documento or self.item.documento
@@ -121,9 +127,27 @@ def _contido(p: set[str], q: set[str]) -> bool:
 def pontuar(a: Ref, b: Ref, relacionado: bool) -> int:
     if relacionado:
         return 100
-    cpf = cpf_compativel(a.documento, b.documento)
-    if cpf is False:
+    if cpf_compativel(a.documento, b.documento) is False:
         return 0
+    return max(_pontuar_nome(a, b), _pontuar_descricao(a, b))
+
+
+def _pontuar_descricao(a: Ref, b: Ref) -> int:
+    """Descrição do contas a pagar × observação do banco (boletos do Sicoob não têm favorecido)."""
+    if not a.descricao or not b.descricao or a.item.valor != b.item.valor:
+        return 0
+    ta, tb = tokens(a.descricao), tokens(b.descricao)
+    if min(len(ta), len(tb)) < 2:
+        return 0
+    if ta == tb:
+        return 85
+    if _contido(ta, tb) or _contido(tb, ta):
+        return 75
+    return 0
+
+
+def _pontuar_nome(a: Ref, b: Ref) -> int:
+    cpf = cpf_compativel(a.documento, b.documento)
     ta, tb = tokens(a.nome), tokens(b.nome)
     comum = {x for x in ta if any(_igual(x, y) for y in tb)}
     if not comum:
@@ -196,7 +220,7 @@ def casar(origens: list[Ref], destinos: list[Ref], relacoes: dict[str, str],
             if cpf_compativel(a.documento, b.documento) is False:
                 continue
             da, db = _data(a.item.data), _data(b.item.data)
-            if usar_datas and da and db and abs((da - db).days) > 5:
+            if usar_datas and da and db and not -30 <= (db - da).days <= 5:
                 continue
             unir(a, b)
             aprendidos.add((frozenset(tokens(a.nome)), frozenset(tokens(b.nome))))
@@ -253,6 +277,7 @@ class Linha:
     banco_grupo: list[Item] = field(default_factory=list)
     divergencias: list[dict] = field(default_factory=list)
     avisos: list[str] = field(default_factory=list)
+    justificativa: str = ""
 
     @property
     def confere(self) -> bool:
@@ -269,7 +294,9 @@ class Relatorio:
     explicacao: list[str]
     pontos: list[str]
     acoes: list[str]
-    observacoes: str = ""
+    observacoes: list[dict] = field(default_factory=list)
+    folha_em_apuracao: bool = False
+    periodo: list[str] = field(default_factory=list)
 
     @property
     def divergentes(self) -> list[Linha]:
@@ -280,7 +307,7 @@ class Relatorio:
 
 
 def conferir_tres(contas: Documento, banco: Documento | None = None, folha: Documento | None = None,
-                  relacoes: dict[str, str] | None = None, aceitar_data_sicoob: bool = False,
+                  relacoes: dict[str, str] | None = None, aceitar_data_sicoob: bool = True,
                   observacoes: str = "") -> Relatorio:
     """Sem banco: só as contas de folha entram (as demais são desconsideradas)."""
     relacoes = relacoes or {}
@@ -300,8 +327,8 @@ def conferir_tres(contas: Documento, banco: Documento | None = None, folha: Docu
     m_cb, grupos = {}, []
     if banco:
         cpf_da_folha = {k: f.item.documento for k, (f, _) in m_cf.items()}
-        refs_c = [Ref(i.id, i, nome_no_banco(i, proprios), cpf_da_folha.get(i.id, "")) for i in contas_itens]
-        refs_b = [Ref(i.id, i, nome_do_banco(i)) for i in banco.itens]
+        refs_c = [Ref(i.id, i, nome_no_banco(i, proprios), cpf_da_folha.get(i.id, ""), descricao_limpa(i)) for i in contas_itens]
+        refs_b = [Ref(i.id, i, nome_do_banco(i), descricao=i.descricao) for i in banco.itens]
         m_cb = casar(refs_c, refs_b, relacoes, por_valor=True, usar_datas=datas_ok)
         casados_b = {b.chave for b, _ in m_cb.values()}
         grupos = agrupar([r for r in refs_c if r.chave not in m_cb], [r for r in refs_b if r.chave not in casados_b])
@@ -325,9 +352,12 @@ def conferir_tres(contas: Documento, banco: Documento | None = None, folha: Docu
         linha = Linha(pessoa, c, f[0].item if f else None, b[0].item if b else None, de_folha=eh_folha(c),
                       fora_do_periodo=fora, confianca=min([x[1] for x in (f, b) if x] or [100]), nome_conta=nome_conta)
         if b and b[1] == CONFIANCA_POR_VALOR and not eh_pensao(c):
-            linha.avisos.append(f"Associado por valor{' e data' if datas_ok else ''}: no contas a pagar "
-                                f"**{nome_conta or '(sem nome)'} ({brl(c.valor)})**, no banco **{nome_do_banco(b[0].item) or '(sem nome)'}**. "
-                                "Confirme se é o mesmo favorecido.")
+            banco_b = b[0].item
+            no_banco = (f"favorecido **{banco_b.nome}**" if banco_b.nome else "sem favorecido")
+            no_banco += f", observação **{banco_b.descricao}**" if banco_b.descricao else ""
+            linha.avisos.append(f"Associado só pelo valor ({brl(c.valor)}): no contas a pagar, fornecedor **{c.nome or '—'}** "
+                                f"e descrição **{descricao_limpa(c) or '—'}**; no banco, {no_banco}. "
+                                "Nome e descrição não coincidem: confirme se é o mesmo pagamento.")
         if c.id in em_grupo:
             linha.em_grupo = True
             lanc, ag = em_grupo[c.id]
@@ -370,13 +400,81 @@ def conferir_tres(contas: Documento, banco: Documento | None = None, folha: Docu
     tem_folha_a_pagar = any(l.de_folha for l in linhas)
     banco_cobre_folha = bool(banco) and (folha_no_banco or not tem_folha_a_pagar)
 
+    lidas, folha_em_apuracao = _ler_observacoes(observacoes, linhas)
+    cobre = banco_cobre_folha and not folha_em_apuracao
     for l in linhas:
-        _classificar(l, folha is not None, banco is not None, banco_cobre_folha, datas_ok)
+        _classificar(l, folha is not None, banco is not None, cobre, datas_ok)
+    _efeito_observacoes(lidas, linhas, folha_em_apuracao)
 
     return Relatorio(folha is not None, banco is not None, banco_cobre_folha, linhas,
-                     _fechamento(linhas, banco, folha, banco_cobre_folha),
-                     _explicacao(linhas, banco, banco_cobre_folha), _pontos(linhas, banco, folha, proprios, banco_cobre_folha, datas_ok),
-                     _acoes(linhas, contas, banco, folha), observacoes)
+                     _fechamento(linhas, banco, folha, cobre),
+                     _explicacao(linhas, banco, cobre),
+                     _pontos(linhas, banco, folha, proprios, banco_cobre_folha or folha_em_apuracao, datas_ok),
+                     _acoes(linhas, contas, banco, folha), lidas, folha_em_apuracao, contas.periodo)
+
+
+# ------------------------------------------------------------------ observações do operador
+
+PALAVRAS_OBSERVACAO = PALAVRAS_ROTULO | {
+    "AINDA", "NAO", "RECEBIDO", "RECEBIDA", "GERADO", "GERADA", "ENCONTRA", "ENCONTRAM", "SE", "O", "OS", "AS",
+    "PARA", "COM", "SEM", "POR", "QUE", "JA", "FOI", "SERA", "ESTA", "ESTAO", "AGENDADO", "AGENDADA", "AGENDAR",
+    "AGENDAMENTO", "AGENDAMENTOS", "PAGO", "PAGA", "PAGAR", "CONTA", "CONTAS", "VALOR", "CLIENTE", "ENVIADO",
+    "ENVIAR", "NOTA", "FISCAL", "MES", "PERIODO", "APURACAO", "FECHAMENTO", "PENDENTE", "AGUARDANDO", "ESTAGIOS",
+    "FALTA", "FALTOU", "ESSE", "ESSA", "ESTE", "ESTA", "AQUI", "LANCAMENTO", "LANCAMENTOS", "BANCO", "SEMANA",
+}
+NEGATIVAS = {"NAO", "AINDA", "PENDENTE", "AGUARDANDO", "SEM", "FALTA", "FALTOU"}
+RE_FOLHA_PENDENTE = re.compile(r"(FOLHA|SALARIOS).*(APURACAO|FECHAMENTO|CALCULO|PENDENTE|PROCESSAMENTO|ABERT)"
+                               r"|(APURACAO|FECHAMENTO|CALCULO|PROCESSAMENTO).*(FOLHA|SALARIOS)")
+
+
+def _ler_observacoes(texto: str, linhas: list[Linha]) -> tuple[list[dict], bool]:
+    """Cada linha do operador vira uma observação com o que ela muda na conferência.
+
+    Regras fixas e visíveis: citar a folha em apuração tira os salários da
+    cobrança dos agendamentos; citar um favorecido que não foi agendado justifica
+    a ausência. O efeito de cada linha aparece no resultado.
+    """
+    lidas, folha_pendente = [], False
+    for bruta in (texto or "").splitlines():
+        frase = re.sub(r"^\s*[-*•·]+\s*", "", bruta).strip()
+        if not frase:
+            continue
+        n = norm(frase)
+        obs = {"texto": frase, "efeito": "", "linhas": [], "folha": bool(RE_FOLHA_PENDENTE.search(n)),
+               "negativa": bool(set(n.split()) & NEGATIVAS)}
+        folha_pendente = folha_pendente or obs["folha"]
+        chaves = {t for t in tokens(frase) if len(t) >= 4 and t not in PALAVRAS_OBSERVACAO}
+        if chaves:
+            for i, l in enumerate(linhas):
+                if not l.conta:
+                    continue
+                nomes = tokens(l.nome_conta) | tokens(l.conta.nome) | tokens(descricao_limpa(l.conta))
+                if any(_igual(x, y) for x in chaves for y in nomes):
+                    obs["linhas"].append(i)
+                    if not l.banco and (obs["negativa"] or not l.justificativa):
+                        l.justificativa = frase
+        lidas.append(obs)
+    return lidas, folha_pendente
+
+
+def _efeito_observacoes(lidas: list[dict], linhas: list[Linha], folha_pendente: bool) -> None:
+    for obs in lidas:
+        efeitos = []
+        if obs["folha"]:
+            n = sum(1 for l in linhas if l.de_folha and l.conta and not l.banco)
+            efeitos.append(f"folha em apuração: {n} lançamento(s) de folha sem agendamento não foram cobrados" if n
+                           else "folha em apuração, mas todos os lançamentos de folha já estão agendados")
+        for i in obs.pop("linhas"):
+            l = linhas[i]
+            if l.banco and obs["negativa"]:
+                efeitos.append(f"**atenção:** {l.nome_conta} aparece agendado no banco ({brl(l.banco.valor)})")
+            elif l.banco:
+                efeitos.append(f"relacionada a {l.nome_conta}, que está agendado")
+            elif l.justificativa:
+                efeitos.append(f"justifica {l.nome_conta} ({brl(l.conta.valor)}) sem agendamento")
+        obs["efeito"] = "; ".join(efeitos) or "não citou nenhum lançamento; vai só na mensagem"
+        obs.pop("negativa")
+
 
 
 def _classificar(l: Linha, tem_folha: bool, tem_banco: bool, banco_cobre_folha: bool, datas_ok: bool) -> None:
@@ -404,7 +502,7 @@ def _classificar(l: Linha, tem_folha: bool, tem_banco: bool, banco_cobre_folha: 
                         "situacao": f"Agendado **{brl(abs(d))} a {'mais' if d > 0 else 'menos'}**",
                         "acao": f"ajustar o agendamento de **{l.pessoa}** de {brl(b.valor)} para **{brl(c.valor)}**, ou corrigir o contas a pagar"})
     if (c and not b and not l.fora_do_periodo and not l.em_grupo and not l.debito_automatico
-            and (banco_cobre_folha or not l.de_folha)):
+            and not l.justificativa and (banco_cobre_folha or not l.de_folha)):
         div.append({"tipo": "faltou_agendar", "diferenca": -c.valor, "situacao": "**Faltou agendar**",
                     "acao": f"agendar **{brl(c.valor)}** para **{l.pessoa}**" + (f" (vencimento {c.data})" if c.data else "")})
     if b and not c and not f:
@@ -490,6 +588,8 @@ def _pontos(linhas, banco, folha, proprios, banco_cobre_folha, datas_ok):
             pontos.append(f"**{l.pessoa} — {brl(c.valor)}** ({c.categoria or 'folha'}): não aparece no extrato da folha enviado; "
                           f"precisa de documento separado.{extra}")
         pontos.extend(l.avisos)
+        if l.justificativa and c and not b:
+            pontos.append(f"**{l.nome_conta} — {brl(c.valor)}**: sem agendamento, justificado pela sua observação.")
         if l.debito_automatico and c:
             pontos.append(f"**{l.pessoa} — {brl(c.valor)}**: débito automático, não precisa de agendamento.")
         if l.confianca == 50 and (f or b):
@@ -602,5 +702,5 @@ def renderizar(r: Relatorio) -> str:
         else:
             out += ["**Ação:**", ""] + [f"{n}. {f}" for n, f in enumerate(frases, 1)] + [""]
     if r.observacoes:
-        out += [f"_Observações do operador:_ {r.observacoes}", ""]
+        out += ["### Suas observações", ""] + [f"* {o['texto']} → {o['efeito']}" for o in r.observacoes] + [""]
     return "\n".join(out).rstrip() + "\n"

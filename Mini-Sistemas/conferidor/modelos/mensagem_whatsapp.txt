@@ -1,0 +1,7 @@
+{saudacao}, {cliente}
+Segue abaixo o contas a pagar do período de {inicio} a {fim}.
+{situacao_banco}
+{observacoes}
+{demais}
+Abaixo, envio a relação dos agendamentos para conferência e autorização.
+Fico à disposição para qualquer ajuste ou auxílio!

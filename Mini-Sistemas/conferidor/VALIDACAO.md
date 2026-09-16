@@ -1,5 +1,20 @@
 # Validação
 
+## 16/09/2026 — descrição, observações e mensagem (v0.3)
+
+Comando: `python -m pytest -q -p no:cacheprovider`. Resultado: **42 testes aprovados**.
+
+- Boleto do Sicoob sem favorecido casa pela descrição; descrição parecida com
+  valor diferente não casa.
+- Data do Sicoob tratada como data do agendamento: depois do vencimento é
+  divergência, antes não. Associação por valor aceita agendamento até 30 dias antes.
+- Observações: folha em apuração, favorecido justificado, observação desmentida
+  pelo banco e observação sem relação — cada uma com o efeito exibido.
+- Mensagem: texto idêntico ao modelo com observações; sem observações; banco
+  efetuado; saudação pelo horário; pendências antes do envio.
+- Amostras reais: mesmas divergências da v0.2. Na Empresa A, três pares que eram
+  "associados só pelo valor" passaram a casar pela descrição.
+
 ## 16/09/2026 — conferência em três vias (v0.2)
 
 Comando: `python -m pytest -q -p no:cacheprovider`.

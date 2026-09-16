@@ -21,6 +21,7 @@ def test_interface_amostras(posicao):
     assert len(at.tabs) == 4
     assert at.session_state["resultado"]["relatorio"] is not None
     assert any("conferência entre" in m.value or "Tudo confere" in m.value for m in at.markdown)
+    assert at.code[0].value.splitlines()[1].startswith("Segue abaixo o contas a pagar do período de")
     at.text_area[0].set_value("Novo cenário").run()
     assert "resultado" not in at.session_state
 

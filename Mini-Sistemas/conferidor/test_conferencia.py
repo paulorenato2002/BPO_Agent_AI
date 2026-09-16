@@ -45,22 +45,22 @@ def test_folha_e_banco_batem():
 
 
 def test_salario_a_menor_no_contas():
-    c = doc("contas", [conta("1", "SALÁRIO - BRUNO COSTA", 80000), conta("2", "Aluguel", 50000, "Aluguel", "IMOBILIARIA X")])
-    f = doc("folha", [folha("1", "BRUNO COSTA DIAS", 92000)])
+    c = doc("contas", [conta("1", "SALÁRIO - BRUNO COSTA", 83000), conta("2", "Aluguel", 50000, "Aluguel", "IMOBILIARIA X")])
+    f = doc("folha", [folha("1", "BRUNO COSTA DIAS", 95000)])
     r = conferir_tres(c, None, f)
     assert tipos(r) == ["valor_folha"]
     assert len(r.linhas) == 1                         # sem banco, só a folha conta
     texto = r.markdown()
     assert "R$ 120,00 a menor" in texto
-    assert "passa de **R$ 1.300,00** para **R$ 1.420,00**" in texto
+    assert "passa de **R$ 1.330,00** para **R$ 1.450,00**" in texto
 
 
 def test_faltou_agendar_e_agendado_sem_conta():
-    c = doc("contas", [conta("1", "Serviços prestados", 74490, "Remuneração de Autônomos", "CARLA MENDES")])
+    c = doc("contas", [conta("1", "Serviços prestados", 61230, "Remuneração de Autônomos", "CARLA MENDES")])
     b = doc("itau", [banco("1", "ESCRITORIO BETA", 30000, "11.222.333/0001-44")], PERIODO)
     r = conferir_tres(c, b)
     assert tipos(r) == ["banco_sem_conta", "faltou_agendar"]
-    assert any("Agendar **R$ 744,90** para **CARLA MENDES**" in a for a in [x[0].upper() + x[1:] for x in r.acoes])
+    assert any("Agendar **R$ 612,30** para **CARLA MENDES**" in a for a in [x[0].upper() + x[1:] for x in r.acoes])
     assert not any("sem explicação" in t for t in r.explicacao)
 
 
@@ -79,11 +79,11 @@ def test_valor_diferente_sem_padrao_de_desconto():
 
 
 def test_pensao_vira_ponto_para_confirmar():
-    c = doc("contas", [conta("1", "PENSÃO ALIMENTÍCIA - DIEGO ALVES", 45279, "Pensão Alimentícia", "MARTA SOUZA")])
-    b = doc("sicoob", [banco("1", "MARTA SOUZA PEREIRA", 45279, data="04/09/2026")])
+    c = doc("contas", [conta("1", "PENSÃO ALIMENTÍCIA - DIEGO ALVES", 41234, "Pensão Alimentícia", "MARTA SOUZA")])
+    b = doc("sicoob", [banco("1", "MARTA SOUZA PEREIRA", 41234, data="04/09/2026")])
     r = conferir_tres(c, b)
     assert not r.divergentes
-    assert any(p.startswith("**Pensão — R$ 452,79**") and "MARTA SOUZA PEREIRA" in p for p in r.pontos)
+    assert any(p.startswith("**Pensão — R$ 412,34**") and "MARTA SOUZA PEREIRA" in p for p in r.pontos)
 
 
 def test_socio_recebe_pela_empresa_e_relacao_se_repete():
@@ -174,3 +174,67 @@ def test_amostras_reais(reais):
         assert obtidas == sorted(e["divergencias"]), grupo
         assert r.banco_cobre_folha is e["banco_cobre_folha"], grupo
         assert not any("sem explicação" in t for t in r.explicacao), grupo
+
+
+# ------------------------------------------------------------------ descrição, datas e observações
+
+def test_boleto_sem_favorecido_casa_pela_descricao():
+    c = doc("contas", [conta("1", "9/12 - ÁGUA E ENERGIA ELÉTRICA", 543210, "Energia", "IMOBILIARIA SOL")])
+    b = doc("sicoob", [banco("1", "", 543210, data="04/09/2026", descricao="ÁGUA E ENERGIA ELÉTRICA")])
+    r = conferir_tres(c, b)
+    assert not r.divergentes
+    assert not any("só pelo valor" in p for p in r.pontos)
+
+
+def test_descricao_parecida_com_valor_diferente_nao_casa():
+    c = doc("contas", [conta("1", "MANUTENÇÃO PREVENTIVA SEMANAL", 120000, "Manutenção", "OFICINA ALFA")])
+    b = doc("sicoob", [banco("1", "", 99000, descricao="MANUTENCAO PREVENTIVA")])
+    assert tipos(conferir_tres(c, b)) == ["banco_sem_conta", "faltou_agendar"]
+
+
+def test_data_do_sicoob_e_a_data_do_agendamento():
+    c = doc("contas", [conta("1", "Serviço", 50000, "Serviços", "ALFA SERVICOS", data="10/09/2026")])
+    depois = doc("sicoob", [banco("1", "ALFA SERVICOS", 50000, data="12/09/2026")])
+    antes = doc("sicoob", [banco("1", "ALFA SERVICOS", 50000, data="04/09/2026")])
+    assert tipos(conferir_tres(c, depois)) == ["data"]
+    assert not conferir_tres(c, antes).divergentes
+
+
+def test_associacao_por_valor_aceita_agendamento_antecipado():
+    c = doc("contas", [conta("1", "Consultoria", 123456, "Serviços", "EMPRESA ALFA", data="10/09/2026")])
+    b = doc("sicoob", [banco("1", "", 123456, data="20/08/2026", descricao="HONORARIOS")])
+    r = conferir_tres(c, b)
+    assert not r.divergentes
+    assert any("só pelo valor" in p for p in r.pontos)
+    longe = doc("sicoob", [banco("1", "", 123456, data="01/07/2026", descricao="HONORARIOS")])
+    assert tipos(conferir_tres(c, longe)) == ["banco_sem_conta", "faltou_agendar"]
+
+
+def test_observacao_de_folha_em_apuracao():
+    c = doc("contas", [conta("1", "SALÁRIO - HELENA ROCHA", 200000), conta("2", "SALÁRIO - IVO MATOS", 150000),
+                       conta("3", "Energia", 30000, "Energia", "COMPANHIA LUZ")])
+    b = doc("itau", [banco("1", "HELENA ROCHA", 200000), banco("2", "COMPANHIA LUZ SA", 30000)], PERIODO)
+    sem_obs = conferir_tres(c, b)
+    assert tipos(sem_obs) == ["faltou_agendar"]
+    r = conferir_tres(c, b, observacoes="* A folha de pagamento encontra-se em apuração.")
+    assert not r.divergentes and r.folha_em_apuracao
+    assert "1 lançamento(s) de folha sem agendamento" in r.observacoes[0]["efeito"]
+
+
+def test_observacao_justifica_favorecido_nao_agendado():
+    c = doc("contas", [conta("1", "Agenciamento", 30000, "Serviços", "AGENCIA ESTAGIOS ZETA"),
+                       conta("2", "Energia", 30000, "Energia", "COMPANHIA LUZ", data="12/09/2026")])
+    b = doc("itau", [banco("1", "COMPANHIA LUZ SA", 30000, data="12/09/2026")], PERIODO)
+    r = conferir_tres(c, b, observacoes="Zeta — boleto ainda não recebido/gerado.")
+    assert not r.divergentes
+    assert r.observacoes[0]["efeito"].startswith("justifica AGENCIA ESTAGIOS ZETA")
+    assert any("justificado pela sua observação" in p for p in r.pontos)
+
+
+def test_observacao_desmentida_pelo_banco_e_sem_relacao():
+    c = doc("contas", [conta("1", "Agenciamento", 30000, "Serviços", "AGENCIA ZETA")])
+    b = doc("itau", [banco("1", "AGENCIA ZETA LTDA", 30000)], PERIODO)
+    r = conferir_tres(c, b, observacoes="Zeta: boleto ainda não recebido\nCliente viaja semana que vem")
+    assert "atenção" in r.observacoes[0]["efeito"]
+    assert r.observacoes[1]["efeito"] == "não citou nenhum lançamento; vai só na mensagem"
+    assert "### Suas observações" in r.markdown()

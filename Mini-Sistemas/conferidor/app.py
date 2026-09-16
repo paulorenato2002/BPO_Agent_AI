@@ -12,6 +12,7 @@ import streamlit as st
 
 from conferencia import conferir_tres, nome_no_banco, fornecedores_proprios
 from core import brl, conferir, ler_pdf, serializar
+from mensagem import mensagem_whatsapp, pendencias_antes_de_enviar
 
 ROOT = Path(__file__).resolve().parent
 TIPOS_BANCO = ["itau", "sicoob"]
@@ -35,16 +36,19 @@ with st.sidebar:
         uploads = st.file_uploader("Contas a pagar + agendamentos do banco e/ou extrato da folha",
                                    type=["pdf"], accept_multiple_files=True)
         fontes = [(u.name, u.getvalue()) for u in uploads]
-    observacoes = st.text_area("Observações para a conferência",
-                               help="Aparecem no resultado. Texto livre não muda as regras.")
+    cliente = st.text_input("Cliente no WhatsApp", placeholder="@nome do contato")
+    observacoes = st.text_area(
+        "Observações (uma por linha)",
+        placeholder="A folha de pagamento encontra-se em apuração.\nFornecedor X — boleto ainda não recebido.",
+        help="Cada linha vai para a mensagem ao cliente. Se citar a folha em apuração ou um favorecido, "
+             "a conferência leva em conta, e o resultado mostra o efeito de cada linha.")
     st.caption("Relações de favorecido já confirmadas, uma por linha: nome no contas a pagar = nome no banco.")
     relacoes_txt = st.text_area("Relações confirmadas", placeholder="Fornecedor Exemplo = Recebedor Exemplo")
-    data_validada = st.checkbox("A coluna Data do Sicoob é a data do pagamento", value=False)
     executar = st.button("Conferir", type="primary", width="stretch")
 
 # Alterar qualquer entrada invalida o resultado anterior.
 assinatura = sha256(repr(([(n, sha256(b).hexdigest()) for n, b in fontes],
-                          observacoes, relacoes_txt, data_validada)).encode()).hexdigest()
+                          cliente, observacoes, relacoes_txt)).encode()).hexdigest()
 if st.session_state.get("assinatura") != assinatura:
     st.session_state.pop("resultado", None)
 
@@ -88,20 +92,19 @@ if executar:
             relatorio, detalhes = None, {}
             if not erros:
                 banco, folha = (bancos or [None])[0], (folhas or [None])[0]
-                relatorio = conferir_tres(contas[0], banco, folha, relacoes, data_validada, observacoes)
+                relatorio = conferir_tres(contas[0], banco, folha, relacoes, observacoes=observacoes)
                 proprios = fornecedores_proprios(contas[0].itens)
                 pelo_favorecido = replace(contas[0], itens=[replace(i, nome=nome_no_banco(i, proprios)) for i in contas[0].itens])
                 if banco:
-                    detalhes["Contas × banco"] = conferir(pelo_favorecido, banco, relacoes, data_validada)
+                    detalhes["Contas × banco"] = conferir(pelo_favorecido, banco, relacoes, True)
                 if folha:
                     pela_pessoa = replace(contas[0], itens=[replace(i, nome=i.descricao) for i in contas[0].itens])
                     detalhes["Contas × folha"] = conferir(pela_pessoa, folha, relacoes)
                 if banco and folha:
-                    detalhes["Folha × banco"] = conferir(folha, banco, relacoes, data_validada)
+                    detalhes["Folha × banco"] = conferir(folha, banco, relacoes, True)
             st.session_state.resultado = {"docs": docs, "erros": erros, "relatorio": relatorio,
                                           "comparacoes": detalhes, "segundos": perf_counter() - inicio,
-                                          "observacoes": observacoes, "relacoes": relacoes,
-                                          "data_sicoob_validada": data_validada}
+                                          "observacoes": observacoes, "relacoes": relacoes, "cliente": cliente}
             st.session_state.assinatura = assinatura
 
 r = st.session_state.get("resultado")
@@ -130,6 +133,13 @@ with tabs[0]:
         texto = rel.markdown()
         st.markdown(texto)
         st.download_button("Baixar conferência (.md)", texto.encode("utf-8"), "conferencia.md", "text/markdown")
+        st.divider()
+        st.subheader("Mensagem para o cliente")
+        pendencias = pendencias_antes_de_enviar(rel)
+        if pendencias:
+            st.warning("Antes de enviar, resolva ou explique nas observações:\n\n" + "\n".join(f"- {p}" for p in pendencias))
+        st.caption("Copie pelo ícone no canto do quadro.")
+        st.code(mensagem_whatsapp(rel, r["cliente"]), language=None)
     else:
         st.info("Corrija os erros acima para ver a conferência.")
 with tabs[1]:

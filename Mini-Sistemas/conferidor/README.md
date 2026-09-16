@@ -30,6 +30,9 @@ Um lote por empresa:
 Com contas a pagar + folha, só os lançamentos de folha entram; as demais contas
 são desconsideradas. Com o banco, entram todas as contas do período do relatório.
 
+Na tela ainda vão o **cliente** (como marcá-lo no WhatsApp) e as
+**observações**, uma por linha.
+
 ## Como confere
 
 Cada pagamento vira uma linha com o que cada fonte diz dele.
@@ -42,7 +45,8 @@ Cada pagamento vira uma linha com o que cada fonte diz dele.
 3. **Folha × banco:** o que sobrou, com o CPF completo da folha contra o CPF
    mascarado do banco.
 
-O nome casa por palavras, ignorando rótulos (salário, bolsa, LTDA...) e aceitando
+Boleto do Sicoob não tem favorecido, só observação: ela é comparada com a
+**descrição** do contas a pagar (mesmo valor e as mesmas palavras). O nome casa por palavras, ignorando rótulos (salário, bolsa, LTDA...) e aceitando
 abreviação do banco ("MERCADO CENT"). Nome de uma palavra só ("TRANSPORTADORA") só
 vale com o mesmo valor. O que sobra ainda é associado quando o valor é único
 dos dois lados; a relação aprendida vale para os outros pagamentos entre os
@@ -65,10 +69,33 @@ cobrada nos agendamentos: vira um ponto pedindo o relatório que falta.
 O fechamento mostra os totais e explica a diferença entre contas a pagar e
 banco linha a linha. Sobra sem explicação aparece destacada.
 
+## Observações do operador
+
+Cada linha tem um efeito visível no resultado, na seção **Suas observações**:
+
+- **folha em apuração** ("a folha encontra-se em apuração", "salários em
+  fechamento"): os lançamentos de folha sem agendamento não viram "faltou agendar";
+- **cita um favorecido** que não foi agendado ("Fornecedor X — boleto ainda não
+  recebido"): justifica a ausência;
+- **cita um favorecido que está agendado** e diz que não está: alerta de contradição;
+- **não cita nada que o sistema reconheça**: vai só para a mensagem, e o
+  resultado diz isso.
+
+O reconhecimento é por regra fixa e palavra do nome, não interpretação livre.
+Frase que não se encaixa aparece como "vai só na mensagem" — nunca é ignorada
+em silêncio.
+
+## Mensagem ao cliente
+
+`mensagem.py` monta o texto de WhatsApp a partir de `modelos/mensagem_whatsapp.txt`:
+saudação pelo horário, cliente, período do contas a pagar, situação dos
+agendamentos e as observações na ordem escrita. Divergências não entram no
+texto; aparecem num aviso acima dele para serem resolvidas antes do envio.
+
 ## Limites
 
-- Datas do Sicoob só são comparadas se o operador marcar que a coluna é a data
-  do pagamento.
+- A coluna Data do Sicoob é a data do agendamento: agendamento depois do
+  vencimento é divergência; antes, não.
 - Excel, imagens/OCR e outros layouts ficam para depois.
 - A aba **Auditoria detalhada** mantém o cruzamento par a par do piloto, com o
   motivo de cada associação.
@@ -82,6 +109,8 @@ que os testes cobram delas. Sem essa pasta, os testes com amostras são pulados.
 
 `core.ler_pdf(nome, bytes)` → `Documento`.
 `conferencia.conferir_tres(contas, banco, folha, relacoes, aceitar_data_sicoob, observacoes)`
-→ `Relatorio`, com `.markdown()` pronto para a conversa. Antes de expor ao
+→ `Relatorio`, com `.markdown()` pronto para a conversa, e
+`mensagem.mensagem_whatsapp(relatorio, cliente)` → texto para o cliente. Quando
+for para o agente, o modelo da mensagem passa a vir do banco. Antes de expor ao
 agente: escopo por empresa, autenticação, limites de execução e onde o
 resultado fica guardado.
