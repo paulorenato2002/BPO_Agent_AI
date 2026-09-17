@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { BarraLateral } from "./componentes/BarraLateral";
 import { CabecalhoChat } from "./componentes/CabecalhoChat";
 import { Mensagens } from "./componentes/Mensagens";
@@ -19,6 +19,10 @@ export default function Pagina() {
   const [anexos, setAnexos] = useState<AnexoPendente[]>([]);
   const [enviandoArquivo, setEnviandoArquivo] = useState(false);
   const [erroArquivo, setErroArquivo] = useState<string | null>(null);
+  // Entre o clique e o início da resposta há chamadas ao servidor (criar a
+  // conversa). Sem esta trava, Enter duas vezes enviava a mesma mensagem duas vezes.
+  const [preparando, setPreparando] = useState(false);
+  const ocupadoRef = useRef(false);
 
   const { itens: saude, carregando: carregandoSaude } = useSaude();
   const conversas = useConversas();
@@ -67,38 +71,60 @@ export default function Pagina() {
    * em vez de mandar a mensagem para o vazio.
    */
   async function enviar() {
-    let id = conversas.conversaAtivaId;
-    if (!id) {
-      id = await conversas.criarConversa();
-      if (!id) return; // limite atingido: o erro já está na barra lateral
-    }
-    chat.definirConversa(id, (titulo) => conversas.aplicarTitulo(id!, titulo));
-
+    if (ocupadoRef.current || chat.streamando) return;
     const texto = entrada;
     const paraEnviar = anexos;
-    setEntrada("");
-    setAnexos([]);
-    setErroArquivo(null);
+    if (!texto.trim() && paraEnviar.length === 0) return;
 
-    await chat.enviar(texto, paraEnviar);
-    await conversas.carregar();
+    ocupadoRef.current = true;
+    setPreparando(true);
+    try {
+      let id = conversas.conversaAtivaId;
+      if (!id) {
+        id = await conversas.criarConversa();
+        if (!id) return; // limite atingido: o erro já está na barra lateral
+      }
+      chat.definirConversa(id, (titulo) => conversas.aplicarTitulo(id!, titulo));
+
+      setEntrada("");
+      setAnexos([]);
+      setErroArquivo(null);
+
+      const envio = chat.enviar(texto, paraEnviar);
+      // Na tela, quem trava o campo agora é o streaming (com o botão de parar);
+      // a trava interna só sai quando a resposta termina.
+      setPreparando(false);
+      await envio;
+      await conversas.carregar();
+    } finally {
+      ocupadoRef.current = false;
+      setPreparando(false);
+    }
   }
 
   async function novoChat() {
-    setEntrada("");
-    setAnexos([]);
-    setErroArquivo(null);
+    if (ocupadoRef.current) return;
+    ocupadoRef.current = true;
     setBarraAberta(false);
-
-    const id = await conversas.criarConversa();
-    if (!id) return; // limite atingido
-    chat.limpar();
-    chat.definirConversa(id, (titulo) => conversas.aplicarTitulo(id, titulo));
+    try {
+      const id = await conversas.criarConversa();
+      if (!id) return; // limite atingido
+      setEntrada("");
+      setAnexos([]);
+      setErroArquivo(null);
+      chat.limpar();
+      chat.definirConversa(id, (titulo) => conversas.aplicarTitulo(id, titulo));
+    } finally {
+      ocupadoRef.current = false;
+    }
   }
 
   async function selecionarConversa(id: string) {
-    conversas.setConversaAtivaId(id);
     setBarraAberta(false);
+    if (id === conversas.conversaAtivaId && !chat.streamando) return;
+    conversas.setConversaAtivaId(id);
+    setAnexos([]);
+    setErroArquivo(null);
     chat.definirConversa(id, (titulo) => conversas.aplicarTitulo(id, titulo));
     await chat.carregarConversa(id);
   }
@@ -146,6 +172,7 @@ export default function Pagina() {
         />
 
         <Mensagens
+          carregando={chat.carregandoConversa}
           mensagens={chat.mensagens}
           textoStreaming={chat.textoStreaming}
           status={chat.status}
@@ -153,7 +180,13 @@ export default function Pagina() {
           onTentarNovamente={chat.tentarNovamente}
         />
 
-        {conversas.conversaAtivaId && <Arquivamentos key={conversas.conversaAtivaId} conversaId={conversas.conversaAtivaId} />}
+        {conversas.conversaAtivaId && (
+          <Arquivamentos
+            key={conversas.conversaAtivaId}
+            conversaId={conversas.conversaAtivaId}
+            sinal={chat.streamando ? -1 : chat.mensagens.length}
+          />
+        )}
 
         <CampoMensagem
           valor={entrada}
@@ -161,7 +194,7 @@ export default function Pagina() {
           anexos={anexos}
           enviandoArquivo={enviandoArquivo}
           erroArquivo={erroArquivo}
-          streamando={chat.streamando}
+          streamando={chat.streamando || preparando}
           onEnviar={enviar}
           onParar={chat.parar}
           onAnexar={anexarArquivos}

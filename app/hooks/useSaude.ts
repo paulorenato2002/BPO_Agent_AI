@@ -20,6 +20,8 @@ export function useSaude() {
     let ativo = true;
 
     async function verificar() {
+      // Aba escondida não precisa de status; ao voltar, confere na hora.
+      if (document.visibilityState === "hidden") return;
       try {
         const resposta = await fetch("/api/saude", { cache: "no-store" });
         if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`);
@@ -43,10 +45,15 @@ export function useSaude() {
 
     verificar();
     const id = setInterval(verificar, INTERVALO_MS);
+    const aoVoltar = () => {
+      if (document.visibilityState === "visible") verificar();
+    };
+    document.addEventListener("visibilitychange", aoVoltar);
 
     return () => {
       ativo = false;
       clearInterval(id);
+      document.removeEventListener("visibilitychange", aoVoltar);
     };
   }, []);
 

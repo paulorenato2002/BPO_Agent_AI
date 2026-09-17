@@ -1,5 +1,25 @@
 # Validação
 
+## 17/09/2026 — primeira rodada pelo chat (v0.5)
+
+Teste do operador numa quinzena (11 a 20/09) de uma empresa: 6 divergências,
+das quais 4 eram falsas. Causas e correções:
+
+- FGTS com fornecedor "Receita Federal" casado pelo nome com o DARF do INSS;
+  o PIX à Caixa e o INSS sobravam logo abaixo. Agora a categoria indica o
+  favorecido, o valor igual pesa e o par é trocado.
+- INSS contado como folha ("INSS sobre Salários") e folha cobrada fora da
+  janela do dia 28 ao dia 08.
+- Pagamentos "Efetuados" no banco sem conta em aberto contados como divergência.
+
+Resultado na mesma amostra: 2 divergências (as duas contas não agendadas) e a
+diferença de totais 100% explicada; conferido também pela interface do chat.
+
+- Python: **76 testes aprovados** (leitura de planilha/texto, janela da folha,
+  categoria, troca de pares, pagos no banco, VT/VA pessoa a pessoa e pelo
+  total, mensagem formatada, empresa pelo nome do arquivo).
+- Agente: 286 testes aprovados, typecheck e lint limpos.
+
 ## 16/09/2026 — ligação com o agente (v0.4)
 
 - Python: **50 testes aprovados** (8 novos da entrada JSON: lote vazio, limite

@@ -5,15 +5,18 @@ import "server-only";
  *
  * Quem confere é o mini-sistema em Python (Mini-Sistemas/conferidor), com as
  * regras e os testes dele. Aqui só se garante que os anexos são do usuário,
- * que são PDFs liberados, e se entrega o conteúdo. As portas são injetadas
+ * liberados e num formato que ele lê, e se entrega o conteúdo. As portas são injetadas
  * para que esta regra seja testada sem banco, Storage nem Python.
  */
 
 export type EntradaConferimento = {
   anexoIds: string[];
   cliente: string;
+  empresa: string;
   observacoes: string;
   relacoes: string;
+  /** Listas (VT, VA...) que o usuário colou na mensagem, uma pessoa por linha. */
+  dadosTexto: string;
 };
 
 export type AnexoParaConferir = {
@@ -43,6 +46,7 @@ export type RespostaConferidor = {
   erros: string[];
   documentos?: DocumentoLido[];
   divergencias?: number;
+  empresa?: string;
   avisos?: string[];
   relatorio_markdown?: string;
   pendencias_antes_de_enviar?: string[];
@@ -55,8 +59,10 @@ export type PortasConferimento = {
   conferir: (pedido: {
     arquivos: { nome: string; base64: string }[];
     cliente: string;
+    empresa: string;
     observacoes: string;
     relacoes: string;
+    dados_texto: string;
   }) => Promise<RespostaConferidor>;
 };
 
@@ -64,7 +70,9 @@ export type ResultadoConferimento =
   | { ok: true; resposta: RespostaConferidor }
   | { ok: false; erro: string; codigo: string };
 
-export const MAX_ANEXOS_CONFERENCIA = 5;
+export const MAX_ANEXOS_CONFERENCIA = 8;
+/** PDFs dos relatórios; planilhas e texto com listas de VT/VA. */
+export const EXTENSOES_CONFERENCIA = ["pdf", "xlsx", "csv", "txt"] as const;
 
 export async function conferirAgendamentos(
   entrada: EntradaConferimento,
@@ -92,11 +100,17 @@ export async function conferirAgendamentos(
     };
   }
 
-  const naoPdf = anexos.filter((a) => (a.extensao ?? "").replace(/^\./, "").toLowerCase() !== "pdf");
-  if (naoPdf.length > 0) {
+  const extensao = (a: AnexoParaConferir) => (a.extensao ?? "").replace(/^\./, "").toLowerCase();
+  const foraDoFormato = anexos.filter(
+    (a) => !(EXTENSOES_CONFERENCIA as readonly string[]).includes(extensao(a))
+  );
+  if (foraDoFormato.length > 0) {
+    const xls = foraDoFormato.some((a) => extensao(a) === "xls");
     return {
       ok: false,
-      erro: `A conferência lê apenas PDF. Fora do formato: ${naoPdf.map((a) => a.nome_original).join(", ")}.`,
+      erro:
+        `A conferência lê PDF, XLSX, CSV e TXT. Fora do formato: ${foraDoFormato.map((a) => a.nome_original).join(", ")}.` +
+        (xls ? " Planilha .xls antiga: salve como .xlsx." : ""),
       codigo: "formato_nao_suportado",
     };
   }
@@ -113,8 +127,10 @@ export async function conferirAgendamentos(
   const resposta = await portas.conferir({
     arquivos,
     cliente: entrada.cliente,
+    empresa: entrada.empresa,
     observacoes: entrada.observacoes,
     relacoes: entrada.relacoes,
+    dados_texto: entrada.dadosTexto,
   });
   return { ok: true, resposta };
 }

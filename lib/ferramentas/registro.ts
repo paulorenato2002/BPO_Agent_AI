@@ -47,6 +47,17 @@ class RegistroFerramentas {
     this.ferramentas.set(chave, ferramenta);
   }
 
+  /**
+   * Troca a definição de uma ferramenta que JÁ existe (recarga de módulo em
+   * desenvolvimento). Código novo continua passando por `registrar`.
+   */
+  substituir(ferramenta: QualquerFerramenta): void {
+    if (!this.ferramentas.has(ferramenta.codigo)) {
+      throw new Error(`Ferramenta "${ferramenta.codigo}" não está registrada para ser substituída.`);
+    }
+    this.ferramentas.set(ferramenta.codigo, ferramenta);
+  }
+
   obter(codigo: string): QualquerFerramenta | undefined {
     return this.ferramentas.get(codigo);
   }

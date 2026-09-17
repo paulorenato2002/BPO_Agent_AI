@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import type { Mensagem } from "../componentes/tipos";
 import type { AnexoPendente } from "../componentes/CampoMensagem";
+import { TEXTO_PADRAO_ANEXOS } from "../componentes/anexos-mensagem";
 
 type EventoStream =
   | { type: "titulo"; titulo: string }
@@ -32,6 +33,7 @@ export function useChat() {
   const [status, setStatus] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [streamando, setStreamando] = useState(false);
+  const [carregandoConversa, setCarregandoConversa] = useState(false);
 
   // Conversa em que as mensagens serão persistidas. Guardado em ref para o
   // stream em andamento não usar um valor defasado.
@@ -40,6 +42,17 @@ export function useChat() {
   const abortRef = useRef<AbortController | null>(null);
   // Guarda a última tentativa para o botão "tentar de novo".
   const ultimoEnvioRef = useRef<Mensagem[] | null>(null);
+  // Cada geração tem um número. Trocar de conversa ou limpar invalida a geração
+  // em andamento: o que ela ainda receber não cai na conversa nova.
+  const geracaoRef = useRef(0);
+  // O texto chega em pedaços; a tela é atualizada no máximo uma vez por quadro.
+  const textoRef = useRef("");
+  const quadroRef = useRef<number | null>(null);
+
+  const cancelarQuadro = () => {
+    if (quadroRef.current !== null) cancelAnimationFrame(quadroRef.current);
+    quadroRef.current = null;
+  };
 
   const parar = useCallback(() => {
     abortRef.current?.abort();
@@ -48,16 +61,32 @@ export function useChat() {
     setStatus(null);
   }, []);
 
-  const limpar = useCallback(() => {
+  /** Parar e esquecer: nada da geração atual aparece depois disto. */
+  const descartar = useCallback(() => {
+    geracaoRef.current += 1;
+    cancelarQuadro();
+    textoRef.current = "";
     parar();
-    setMensagens([]);
     setTextoStreaming("");
-    setErro(null);
-    ultimoEnvioRef.current = null;
   }, [parar]);
 
+  const limpar = useCallback(() => {
+    descartar();
+    setCarregandoConversa(false);
+    setMensagens([]);
+    setErro(null);
+    ultimoEnvioRef.current = null;
+  }, [descartar]);
+
   const executar = useCallback(async (historia: Mensagem[]) => {
+    // Uma geração por vez: a anterior (se houver) é descartada.
+    abortRef.current?.abort();
+    const geracao = ++geracaoRef.current;
+    const atual = () => geracao === geracaoRef.current;
+
     ultimoEnvioRef.current = historia;
+    cancelarQuadro();
+    textoRef.current = "";
     setMensagens(historia);
     setErro(null);
     setTextoStreaming("");
@@ -66,6 +95,11 @@ export function useChat() {
 
     const controller = new AbortController();
     abortRef.current = controller;
+
+    const mostrarTexto = () => {
+      quadroRef.current = null;
+      if (atual()) setTextoStreaming(textoRef.current);
+    };
 
     try {
       // Só os campos que o backend/OpenAI entendem; o resto é exibição local.
@@ -94,6 +128,7 @@ export function useChat() {
       while (true) {
         const { done, value } = await leitor.read();
         if (done) break;
+        if (!atual()) break;
         buffer += decodificador.decode(value, { stream: true });
 
         const linhas = buffer.split("\n");
@@ -101,16 +136,24 @@ export function useChat() {
 
         for (const linha of linhas) {
           if (!linha.trim()) continue;
-          const evento = JSON.parse(linha) as EventoStream;
+          let evento: EventoStream;
+          try {
+            evento = JSON.parse(linha) as EventoStream;
+          } catch {
+            continue; // linha corrompida não derruba a resposta inteira
+          }
 
           if (evento.type === "titulo") {
             aoTituloRef.current?.(evento.titulo);
           } else if (evento.type === "status") {
             setStatus(evento.text);
           } else if (evento.type === "delta") {
-            setStatus(null);
-            setTextoStreaming((prev) => prev + evento.text);
+            if (textoRef.current === "") setStatus(null);
+            textoRef.current += evento.text;
+            quadroRef.current ??= requestAnimationFrame(mostrarTexto);
           } else if (evento.type === "done") {
+            cancelarQuadro();
+            textoRef.current = "";
             setMensagens((atual) => mesclar(atual, evento.messages));
             setTextoStreaming("");
             setStatus(null);
@@ -121,26 +164,30 @@ export function useChat() {
         }
       }
     } catch (e) {
-      // Abortar é ação do usuário, não erro.
+      if (!atual()) return;
+      // Abortar é ação do usuário, não erro: o que já chegou fica na conversa.
       if (e instanceof DOMException && e.name === "AbortError") {
-        setTextoStreaming((texto) => {
-          if (texto) {
-            setMensagens((atual) => [
-              ...atual,
-              { papel: "agente", conteudo: texto + "\n\n_(interrompido)_" },
-            ]);
-          }
-          return "";
-        });
+        const parcial = textoRef.current;
+        if (parcial) {
+          setMensagens((anteriores) => [
+            ...anteriores,
+            { papel: "agente", conteudo: parcial + "\n\n_(interrompido)_" },
+          ]);
+        }
       } else {
         setErro(
           e instanceof Error ? e.message : "Falha de rede ao falar com o agente."
         );
       }
     } finally {
-      setStreamando(false);
-      setStatus(null);
-      abortRef.current = null;
+      if (atual()) {
+        cancelarQuadro();
+        textoRef.current = "";
+        setTextoStreaming("");
+        setStreamando(false);
+        setStatus(null);
+        abortRef.current = null;
+      }
     }
   }, []);
 
@@ -152,7 +199,7 @@ export function useChat() {
       const conteudoModelo =
         anexos.length > 0
           ? `${anexos.map((a) => a.blocoParaModelo).join("\n\n")}\n\n${
-              limpo || "Processe os arquivos anexados."
+              limpo || TEXTO_PADRAO_ANEXOS
             }`
           : limpo;
 
@@ -192,12 +239,16 @@ export function useChat() {
 
   /** Carrega o histórico de uma conversa existente. */
   const carregarConversa = useCallback(async (id: string) => {
-    parar();
+    descartar();
+    const geracao = geracaoRef.current;
     setErro(null);
-    setTextoStreaming("");
+    setMensagens([]);
+    setCarregandoConversa(true);
     try {
       const resposta = await fetch(`/api/conversas/${id}/mensagens`, { cache: "no-store" });
       const dados = await resposta.json();
+      // Cliques rápidos em conversas diferentes: só a última resposta vale.
+      if (geracao !== geracaoRef.current) return;
       if (!dados.ok) {
         setErro(dados.mensagem ?? "Não foi possível abrir a conversa.");
         setMensagens([]);
@@ -220,9 +271,11 @@ export function useChat() {
           }]; })
       );
     } catch {
-      setErro("Falha de rede ao abrir a conversa.");
+      if (geracao === geracaoRef.current) setErro("Falha de rede ao abrir a conversa.");
+    } finally {
+      if (geracao === geracaoRef.current) setCarregandoConversa(false);
     }
-  }, [parar]);
+  }, [descartar]);
 
   return {
     mensagens,
@@ -230,6 +283,7 @@ export function useChat() {
     definirConversa,
     carregarConversa,
     textoStreaming,
+    carregandoConversa,
     status,
     erro,
     streamando,

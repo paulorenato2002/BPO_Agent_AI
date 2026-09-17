@@ -155,6 +155,20 @@ describe("catálogo", () => {
     );
   });
 
+  test("recarga do módulo em dev troca a definição em vez de derrubar o chat", async () => {
+    // Simula o registro sobrevivendo com uma definição antiga do mesmo código.
+    const { registrarFerramentasDeNegocio } = await import("../lib/ferramentas/catalogo");
+    const { registroFerramentas } = await import("../lib/ferramentas/registro");
+    const { ferramentaConferirAgendamentos } = await import("../lib/ferramentas/conferimento");
+    registrarFerramentasDeNegocio();
+    registroFerramentas.substituir({ ...ferramentaConferirAgendamentos, versao: "antiga" });
+
+    assert.doesNotThrow(() => registrarFerramentasDeNegocio());
+    assert.equal(registroFerramentas.obter("conferir_agendamentos"), ferramentaConferirAgendamentos);
+    assert.throws(() => registroFerramentas.registrar(ferramentaConferirAgendamentos), /já registrada/);
+    assert.throws(() => registroFerramentas.substituir({ ...ferramentaConferirAgendamentos, codigo: "nova" }), /não está registrada/);
+  });
+
   test("o formato OpenAI expõe nome, descrição e schema", async () => {
     const { registrarFerramentasDeNegocio } = await import("../lib/ferramentas/catalogo");
     const tools = registrarFerramentasDeNegocio().comoToolsOpenAI();

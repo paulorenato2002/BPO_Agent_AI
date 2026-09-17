@@ -42,7 +42,14 @@ function portasFalsas(anexos: AnexoParaConferir[], resposta: RespostaConferidor 
   return { portas, pedidos, buscas };
 }
 
-const entrada = (anexoIds: string[]) => ({ anexoIds, cliente: "@Cliente", observacoes: "Obs.", relacoes: "" });
+const entrada = (anexoIds: string[]) => ({
+  anexoIds,
+  cliente: "@Cliente",
+  empresa: "ABC",
+  observacoes: "Obs.",
+  relacoes: "",
+  dadosTexto: "VT\nAna 10,00",
+});
 
 describe("contrato exposto ao modelo", () => {
   test("descrição manda repassar relatório e mensagem sem alterar", () => {
@@ -50,6 +57,8 @@ describe("contrato exposto ao modelo", () => {
     assert.match(d, /EXATAMENTE como veio/);
     assert.match(d, /mensagem_whatsapp/);
     assert.match(d, /Não invente/);
+    assert.match(d, /formatação do WhatsApp/);
+    assert.match(d, /dadosTexto/);
   });
 
   test("só lê: sem aprovação e risco baixo", () => {
@@ -59,7 +68,7 @@ describe("contrato exposto ao modelo", () => {
 
   test("schema não oferece caminho de arquivo nem usuário", () => {
     const props = Object.keys((ferramentaConferirAgendamentos.schemaEntrada.properties ?? {}) as object);
-    assert.deepEqual(props.sort(), ["anexoIds", "cliente", "observacoes", "relacoes"]);
+    assert.deepEqual(props.sort(), ["anexoIds", "cliente", "dadosTexto", "empresa", "observacoes", "relacoes"]);
   });
 });
 
@@ -69,19 +78,31 @@ describe("validação da entrada", () => {
     assert.equal(validar({ anexoIds: [] }).valido, false);
   });
 
-  test("limita a cinco anexos", () => {
-    const r = validar({ anexoIds: ["1", "2", "3", "4", "5", "6"] });
-    assert.equal(r.valido, false);
+  test("limita a oito anexos", () => {
+    assert.equal(validar({ anexoIds: ["1", "2", "3", "4", "5", "6", "7", "8"] }).valido, true);
+    assert.equal(validar({ anexoIds: ["1", "2", "3", "4", "5", "6", "7", "8", "9"] }).valido, false);
   });
 
   test("aceita anexoId solto, remove repetidos e normaliza textos", () => {
     const r = validar({ anexoId: "a1", cliente: "  @Ana  ", observacoes: ["linha 1", "linha 2", 3] });
     assert.equal(r.valido, true);
     if (!r.valido) return;
-    assert.deepEqual(r.dado, { anexoIds: ["a1"], cliente: "@Ana", observacoes: "linha 1\nlinha 2", relacoes: "" });
+    assert.deepEqual(r.dado, {
+      anexoIds: ["a1"],
+      cliente: "@Ana",
+      empresa: "",
+      observacoes: "linha 1\nlinha 2",
+      relacoes: "",
+      dadosTexto: "",
+    });
 
     const r2 = validar({ anexoIds: ["a1", "a1", "a2"] });
     assert.ok(r2.valido && r2.dado.anexoIds.length === 2);
+  });
+
+  test("dados da mensagem aceitam lista e o nome com sublinhado", () => {
+    const r = validar({ anexoIds: ["a1"], dados_texto: ["VT", "Ana 10,00"], empresa: " L2H " });
+    assert.ok(r.valido && r.dado.dadosTexto === "VT\nAna 10,00" && r.dado.empresa === "L2H");
   });
 
   test("corta observação gigante", () => {
@@ -107,10 +128,13 @@ describe("regras antes do mini-sistema", () => {
     assert.equal(pedidos.length, 0);
   });
 
-  test("planilha é recusada com o nome do arquivo", async () => {
-    const { portas } = portasFalsas([anexo("a1"), anexo("a2", { extensao: "xlsx", nome_original: "contas.xlsx" })]);
+  test("aceita planilha e texto; recusa xls antigo com o nome do arquivo", async () => {
+    const ok = portasFalsas([anexo("a1"), anexo("a2", { extensao: "xlsx" }), anexo("a3", { extensao: ".TXT" })]);
+    assert.ok((await conferirAgendamentos(entrada(["a1", "a2", "a3"]), "u1", ok.portas)).ok);
+
+    const { portas } = portasFalsas([anexo("a1"), anexo("a2", { extensao: "xls", nome_original: "vt.xls" })]);
     const r = await conferirAgendamentos(entrada(["a1", "a2"]), "u1", portas);
-    assert.ok(!r.ok && r.codigo === "formato_nao_suportado" && r.erro.includes("contas.xlsx"));
+    assert.ok(!r.ok && r.codigo === "formato_nao_suportado" && r.erro.includes("vt.xls") && r.erro.includes(".xlsx"));
   });
 
   test("envia conteúdo em base64, na ordem pedida, com cliente e observações", async () => {
@@ -123,6 +147,8 @@ describe("regras antes do mini-sistema", () => {
     assert.equal(Buffer.from(pedidos[0].arquivos[0].base64, "base64").toString(), "%PDF conteudo de a2");
     assert.equal(pedidos[0].cliente, "@Cliente");
     assert.equal(pedidos[0].observacoes, "Obs.");
+    assert.equal(pedidos[0].empresa, "ABC");
+    assert.equal(pedidos[0].dados_texto, "VT\nAna 10,00");
   });
 });
 

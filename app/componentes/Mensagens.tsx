@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { Markdown } from "./Markdown";
+import { extensaoDe, separarAnexos } from "./anexos-mensagem";
 import { CartaoArquivo } from "./CartaoArquivo";
 import { IconeLogo, IconeCopiar, IconeCheck, IconeAlerta, IconeArquivo } from "./icones";
 import { formatarHora, formatarTamanho, type Mensagem } from "./tipos";
 
 type Props = {
+  /** Abrindo uma conversa do histórico: mostra o aviso, não a tela de boas-vindas. */
+  carregando?: boolean;
   mensagens: Mensagem[];
   textoStreaming: string;
   status: string | null;
@@ -15,6 +18,7 @@ type Props = {
 };
 
 export function Mensagens({
+  carregando = false,
   mensagens,
   textoStreaming,
   status,
@@ -41,7 +45,7 @@ export function Mensagens({
     if (seguirFim) fimRef.current?.scrollIntoView({ block: "end" });
   }, [mensagens, textoStreaming, status, seguirFim]);
 
-  const vazio = mensagens.length === 0 && !textoStreaming && !status;
+  const vazio = mensagens.length === 0 && !textoStreaming && !status && !carregando;
 
   return (
     <div
@@ -50,6 +54,7 @@ export function Mensagens({
     >
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
         {vazio && <EstadoVazio />}
+        {carregando && mensagens.length === 0 && <IndicadorStatus texto="Abrindo a conversa..." />}
 
         {mensagens.filter(m => m.papel === "usuario" || (m.papel === "agente" && m.conteudo)).map((m, i) => (
           <BlocoMensagem key={m.id ?? i} mensagem={m} onTentarNovamente={onTentarNovamente} />
@@ -145,7 +150,24 @@ function Avatar() {
   );
 }
 
-function BlocoMensagem({
+/**
+ * O que a pessoa vê da própria mensagem: o texto digitado e os arquivos como
+ * cartões. O bloco com o conteúdo do arquivo é só para o modelo — inclusive
+ * nas conversas reabertas, em que ele vem gravado junto com o texto.
+ */
+function exibicaoDoUsuario(mensagem: Mensagem): { texto: string; anexos: Mensagem["anexos"] } {
+  if (mensagem.anexos) return { texto: mensagem.textoExibido ?? "", anexos: mensagem.anexos };
+  if (mensagem.textoExibido !== undefined) return { texto: mensagem.textoExibido, anexos: undefined };
+  const { texto, anexos } = separarAnexos(mensagem.conteudo);
+  return {
+    texto,
+    anexos: anexos.length
+      ? anexos.map((nome) => ({ nome, resumo: "", extensao: extensaoDe(nome), tamanhoBytes: 0 }))
+      : undefined,
+  };
+}
+
+const BlocoMensagem = memo(function BlocoMensagem({
   mensagem,
   onTentarNovamente,
   streaming = false,
@@ -155,13 +177,14 @@ function BlocoMensagem({
   streaming?: boolean;
 }) {
   const ehUsuario = mensagem.papel === "usuario";
-  const texto = ehUsuario ? (mensagem.textoExibido ?? mensagem.conteudo) : mensagem.conteudo;
+  const exibicao = ehUsuario ? exibicaoDoUsuario(mensagem) : null;
+  const texto = exibicao ? exibicao.texto : mensagem.conteudo;
 
-  if (ehUsuario) {
+  if (exibicao) {
     return (
       <div className="flex flex-col items-end gap-1.5">
-        {mensagem.anexos?.map((anexo) => (
-          <ChipAnexoEnviado key={anexo.nome} nome={anexo.nome} extensao={anexo.extensao} tamanho={anexo.tamanhoBytes} />
+        {exibicao.anexos?.map((anexo, i) => (
+          <ChipAnexoEnviado key={`${anexo.nome}-${i}`} nome={anexo.nome} extensao={anexo.extensao} tamanho={anexo.tamanhoBytes} />
         ))}
         {texto && (
           <div className="max-w-[85%] rounded-2xl bg-azul-suave px-4 py-3 md:max-w-[75%]">
@@ -206,7 +229,7 @@ function BlocoMensagem({
       </div>
     </div>
   );
-}
+});
 
 function ChipAnexoEnviado({
   nome,
@@ -222,7 +245,7 @@ function ChipAnexoEnviado({
       <IconeArquivo extensao={extensao} className="h-6 w-6" />
       <div className="min-w-0">
         <p className="truncate text-sm text-texto">{nome}</p>
-        <p className="text-xs text-texto-suave">{formatarTamanho(tamanho)}</p>
+        {tamanho > 0 && <p className="text-xs text-texto-suave">{formatarTamanho(tamanho)}</p>}
       </div>
     </div>
   );

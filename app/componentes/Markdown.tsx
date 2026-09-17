@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactElement, type ReactNode } from "react";
+import { memo, useState, type ReactElement, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
@@ -18,10 +18,13 @@ function CodeBlock({ lang, text }: { lang?: string; text: string }) {
     }
   }
 
+  // Texto corrido (mensagem para o cliente) quebra a linha; código mantém a rolagem.
+  const ehTexto = !lang || lang === "text" || lang === "texto";
+
   return (
     <div className="my-2 overflow-hidden rounded-lg bg-neutral-900 text-neutral-100">
       <div className="flex items-center justify-between px-3 py-1 text-xs text-neutral-400">
-        <span>{lang || "código"}</span>
+        <span>{ehTexto ? "texto" : lang}</span>
         <button
           type="button"
           onClick={copiar}
@@ -30,7 +33,7 @@ function CodeBlock({ lang, text }: { lang?: string; text: string }) {
           {copiado ? "Copiado!" : "Copiar"}
         </button>
       </div>
-      <pre className="overflow-x-auto px-3 pb-3 text-sm">
+      <pre className={`px-3 pb-3 text-sm ${ehTexto ? "whitespace-pre-wrap break-words" : "overflow-x-auto"}`}>
         <code>{text}</code>
       </pre>
     </div>
@@ -107,16 +110,17 @@ const components: Components = {
   },
 };
 
-export function Markdown({ children }: { children: string }) {
+const PLUGINS_REMARK = [remarkGfm];
+const PLUGINS_REHYPE = [rehypeSanitize];
+
+// Memorizado: enquanto a resposta chega, só o bloco em andamento é refeito;
+// as mensagens anteriores (com tabelas grandes) não são reprocessadas.
+export const Markdown = memo(function Markdown({ children }: { children: string }) {
   return (
     <div className="text-sm">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeSanitize]}
-        components={components}
-      >
+      <ReactMarkdown remarkPlugins={PLUGINS_REMARK} rehypePlugins={PLUGINS_REHYPE} components={components}>
         {children}
       </ReactMarkdown>
     </div>
   );
-}
+});
