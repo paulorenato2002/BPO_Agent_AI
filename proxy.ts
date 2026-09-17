@@ -16,9 +16,13 @@ import { createServerClient } from "@supabase/ssr";
 
 /** Rotas que podem ser abertas sem estar logado. */
 const ROTAS_PUBLICAS = ["/login", "/recuperar-senha", "/definir-senha"];
+const ROTAS_PUBLICAS_EXATAS = ["/api/integracoes/email/n8n/receber"];
 
 function ehRotaPublica(caminho: string): boolean {
-  return ROTAS_PUBLICAS.some((r) => caminho === r || caminho.startsWith(`${r}/`));
+  return (
+    ROTAS_PUBLICAS_EXATAS.includes(caminho) ||
+    ROTAS_PUBLICAS.some((r) => caminho === r || caminho.startsWith(`${r}/`))
+  );
 }
 
 export async function proxy(request: NextRequest) {
