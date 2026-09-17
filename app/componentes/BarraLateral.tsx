@@ -27,6 +27,7 @@ type Props = {
   onSelecionar: (id: string) => void;
   onRenomear: (id: string, titulo: string) => void;
   onArquivar: (id: string) => void;
+  onExcluir: (id: string) => void;
 };
 
 export function BarraLateral({
@@ -41,17 +42,33 @@ export function BarraLateral({
   onSelecionar,
   onRenomear,
   onArquivar,
+  onExcluir,
 }: Props) {
   const [busca, setBusca] = useState("");
   const [menuAberto, setMenuAberto] = useState<string | null>(null);
   const [renomeando, setRenomeando] = useState<string | null>(null);
   const [rascunhoTitulo, setRascunhoTitulo] = useState("");
+  // Excluir é em dois toques: o segundo confirma. Um clique só, num menu que
+  // abre debaixo do cursor, apaga a conversa errada com facilidade demais.
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState<string | null>(null);
 
   // Fecha o menu de ações ao clicar fora ou apertar Esc.
   useEffect(() => {
     if (!menuAberto) return;
-    const aoClicar = () => setMenuAberto(null);
-    const aoTeclar = (e: KeyboardEvent) => e.key === "Escape" && setMenuAberto(null);
+    // Clique DENTRO do menu não fecha: o React entrega o evento já no
+    // document, então `stopPropagation` no menu não impede este ouvinte —
+    // quem decide é a origem do clique.
+    const aoClicar = (e: MouseEvent) => {
+      const alvo = e.target as Element | null;
+      if (alvo?.closest?.('[role="menu"]')) return;
+      setMenuAberto(null);
+      setConfirmandoExclusao(null);
+    };
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setMenuAberto(null);
+      setConfirmandoExclusao(null);
+    };
     document.addEventListener("click", aoClicar);
     document.addEventListener("keydown", aoTeclar);
     return () => {
@@ -228,6 +245,7 @@ export function BarraLateral({
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
+                                setConfirmandoExclusao(null);
                                 setMenuAberto(menuAberto === conversa.id ? null : conversa.id);
                               }}
                               className={`rounded p-1 text-lateral-texto-suave hover:text-lateral-texto ${
@@ -268,12 +286,38 @@ export function BarraLateral({
                                 setMenuAberto(null);
                               }}
                               className="w-full px-3 py-2 text-left text-sm hover:bg-lateral-fundo-hover"
+                              title="Sai da lista e libera uma das 10 conversas ativas. Dá para restaurar."
                             >
                               Arquivar
                             </button>
+                            {confirmandoExclusao === conversa.id ? (
+                              <button
+                                role="menuitem"
+                                onClick={() => {
+                                  onExcluir(conversa.id);
+                                  setConfirmandoExclusao(null);
+                                  setMenuAberto(null);
+                                }}
+                                className="w-full bg-vermelho/10 px-3 py-2 text-left text-sm font-medium text-vermelho hover:bg-vermelho/20"
+                              >
+                                Confirmar exclusão
+                              </button>
+                            ) : (
+                              <button
+                                role="menuitem"
+                                onClick={() => setConfirmandoExclusao(conversa.id)}
+                                className="w-full px-3 py-2 text-left text-sm text-vermelho hover:bg-lateral-fundo-hover"
+                                title="A conversa sai da lista e do agente. O registro fica guardado para auditoria."
+                              >
+                                Excluir
+                              </button>
+                            )}
                             <button
                               role="menuitem"
-                              onClick={() => setMenuAberto(null)}
+                              onClick={() => {
+                                setConfirmandoExclusao(null);
+                                setMenuAberto(null);
+                              }}
                               className="w-full px-3 py-2 text-left text-sm text-lateral-texto-suave hover:bg-lateral-fundo-hover"
                             >
                               Cancelar

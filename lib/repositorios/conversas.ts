@@ -203,6 +203,41 @@ export async function arquivarConversa(
   return { ok: true, dados: true };
 }
 
+/**
+ * Exclusão pedida pelo usuário.
+ *
+ * É lógica, como o schema manda: a conversa some da lista, do agente e do
+ * histórico que ele lê, mas as mensagens continuam gravadas. Num sistema que
+ * move dinheiro, apagar de verdade o registro de uma instrução é perder a
+ * prova do que foi pedido — e ninguém percebe até precisar dela.
+ */
+export async function excluirConversa(
+  usuarioId: string,
+  conversaId: string
+): Promise<Resultado<true>> {
+  const { data, error } = await supabaseAdmin
+    .from("conversas_agente")
+    .update({ status: "excluida", arquivada_em: new Date().toISOString() })
+    .eq("id", conversaId)
+    .eq("usuario_id", usuarioId)
+    .select("id");
+
+  if (error) return falha(error);
+  if (!data?.length) {
+    return { ok: false, codigo: "nao_encontrada", mensagem: "Conversa não encontrada." };
+  }
+
+  await registrarEvento({
+    tipoEvento: "conversa_excluida",
+    descricao: "Conversa excluída pelo usuário.",
+    usuarioId,
+    entidadeTipo: "conversas_agente",
+    entidadeId: conversaId,
+  });
+
+  return { ok: true, dados: true };
+}
+
 /** Restaurar valida o limite de novo — o trigger recusa se não couber. */
 export async function restaurarConversa(
   usuarioId: string,

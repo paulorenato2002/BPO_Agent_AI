@@ -32,16 +32,21 @@ from .caminhos import (
     montar_nome,
     trocar_versao_no_nome,
 )
-from .config import carregar_config, carregar_regras
+from .config import carregar_config, carregar_regras, estrutura_atual, regra_para_pasta_existente
 from .mapear import ErroMapeamento, listar_containers, mapear_uma_vez, resumir, varrer_container
 from .pasta_cliente import resolver_pasta_cliente
 
 # O console do Windows usa cp1252 por padrão: acento sai como "J� EXISTIA" e
 # qualquer símbolo fora da tabela DERRUBA o programa com UnicodeEncodeError —
 # inclusive na hora de imprimir uma mensagem de erro, que é o pior momento.
-for _saida in (sys.stdout, sys.stderr):
+#
+# A ENTRADA tem o mesmo problema, e ele é pior porque é silencioso: o agente
+# manda JSON em UTF-8, o Python lê em cp1252 e "ITAÚ" vira "ITAÃš". O nome do
+# arquivo calculado aqui deixa de bater com o que foi proposto e todo
+# arquivamento falha com "o destino mudou desde a proposta".
+for _fluxo in (sys.stdin, sys.stdout, sys.stderr):
     try:
-        _saida.reconfigure(encoding="utf-8", errors="replace")
+        _fluxo.reconfigure(encoding="utf-8", errors="replace")
     except (AttributeError, OSError):
         pass
 
@@ -57,7 +62,11 @@ def _cor(texto: str, cor: str) -> str:
     return f"{cor}{texto}{FIM}"
 
 
-def _regras_por_codigo(dados: dict) -> dict[str, Regra]:
+def _regras_por_codigo(dados: dict, estrutura: str | None = None) -> dict[str, Regra]:
+    """Regras já adaptadas. `estrutura` do pedido manda; sem ela, vale o ambiente."""
+    if estrutura:
+        cruas = dados.get("regras_cruas") or dados["regras"]
+        return {r["codigo"]: Regra.de_dict(regra_para_pasta_existente(r, estrutura)) for r in cruas}
     return {r["codigo"]: Regra.de_dict(r) for r in dados["regras"]}
 
 
@@ -350,7 +359,8 @@ def cmd_json(args, dados: dict) -> int:
     É por aqui que o agente e o n8n vão falar com o arquivador, sem depender
     de parsear texto colorido.
     """
-    bruto = sys.stdin.read() if args.stdin else args.payload
+    # Lido dos bytes: não depende da codificação que o sistema resolveu usar.
+    bruto = sys.stdin.buffer.read().decode("utf-8", errors="replace") if args.stdin else args.payload
     try:
         entrada = json.loads(bruto)
     except json.JSONDecodeError as e:
@@ -368,7 +378,10 @@ def cmd_json(args, dados: dict) -> int:
         return 1
 
     config = carregar_config()
-    regras = _regras_por_codigo(dados)
+    # A estrutura vem de quem chamou; sem isso, dois processos com ambientes
+    # diferentes calculam caminhos diferentes para o mesmo documento.
+    estrutura = entrada.get("estrutura")
+    regras = _regras_por_codigo(dados, estrutura)
     regra = regras.get(entrada.get("regra", ""))
 
     if not regra:
@@ -396,8 +409,19 @@ def cmd_json(args, dados: dict) -> int:
         print(json.dumps({"ok": False, "erro": str(e), "faltando": e.faltando}, ensure_ascii=False))
         return 1
 
-    if entrada.get("caminho_confirmado") and entrada["caminho_confirmado"] != f"{destino.caminho_relativo}/{nome}":
-        print(json.dumps({"ok": False, "erro": "O destino mudou desde a proposta. Refaça a análise antes de arquivar."}, ensure_ascii=False))
+    caminho_calculado = f"{destino.caminho_relativo}/{nome}"
+    if entrada.get("caminho_confirmado") and entrada["caminho_confirmado"] != caminho_calculado:
+        # Dizer QUAL é a diferença: sem isso o operador só via "refaça a
+        # análise", refazia, e caía no mesmo lugar — porque a divergência é
+        # entre os dois programas, não entre a proposta e o disco.
+        print(json.dumps({
+            "ok": False,
+            "erro": ("O destino calculado agora não é o que estava na proposta. "
+                     f"Proposta: {entrada['caminho_confirmado']}. Calculado: {caminho_calculado}. "
+                     f"Estrutura: {estrutura or estrutura_atual()}."),
+            "caminho_confirmado": entrada["caminho_confirmado"],
+            "caminho_calculado": caminho_calculado,
+        }, ensure_ascii=False))
         return 1
 
     if entrada.get("simular"):

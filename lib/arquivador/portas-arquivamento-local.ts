@@ -53,6 +53,10 @@ function chamarPython(payload: Record<string, unknown>): Promise<RespostaPython>
     const processo = spawn(/* turbopackIgnore: true */ PYTHON, ["-m", "arquivador", "json", "--stdin"], {
       cwd: RAIZ_MINI_SISTEMA,
       windowsHide: true,
+      // O JSON vai em UTF-8. Sem isto, o Python do Windows lê em cp1252 e
+      // "ITAÚ" chega como outra palavra — o nome do arquivo muda e o
+      // arquivamento é recusado por "destino mudou".
+      env: { ...process.env, PYTHONIOENCODING: "utf-8" },
     });
 
     let saida = "";
@@ -149,6 +153,11 @@ async function entregarNaPastaLocal(dados: {
       instituicao: item.instituicao.valor,
       tipo_documento: item.tipoDocumento.valor,
       caminho_confirmado: item.caminhoSugerido,
+      // A mesma estrutura que a análise usou para propor o caminho. Combinar
+      // pelo payload, e não pelo ambiente de cada processo, é o que impede
+      // "o destino mudou desde a proposta" quando só um dos lados tem a
+      // variável de ambiente.
+      estrutura: process.env.ARQUIVADOR_ESTRUTURA === "existente" ? "existente" : "original",
     });
 
     if (!resposta.ok) {

@@ -101,8 +101,8 @@ describe("validação da entrada", () => {
   });
 
   test("dados da mensagem aceitam lista e o nome com sublinhado", () => {
-    const r = validar({ anexoIds: ["a1"], dados_texto: ["VT", "Ana 10,00"], empresa: " L2H " });
-    assert.ok(r.valido && r.dado.dadosTexto === "VT\nAna 10,00" && r.dado.empresa === "L2H");
+    const r = validar({ anexoIds: ["a1"], dados_texto: ["VT", "Ana 10,00"], empresa: " ABC " });
+    assert.ok(r.valido && r.dado.dadosTexto === "VT\nAna 10,00" && r.dado.empresa === "ABC");
   });
 
   test("corta observação gigante", () => {

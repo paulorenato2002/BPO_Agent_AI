@@ -110,11 +110,17 @@ def carregar_regras(caminho: Path) -> dict:
     dados = json.loads(caminho.read_text(encoding="utf-8"))
     if not dados.get("regras"):
         raise SystemExit(f"{caminho} não tem regras. Regere o arquivo.")
+    dados["regras_cruas"] = [dict(r) for r in dados["regras"]]
     dados["regras"] = [regra_para_pasta_existente(r) for r in dados["regras"]]
     return dados
 
 
-def regra_para_pasta_existente(regra: dict) -> dict:
+def estrutura_atual() -> str:
+    """Qual estrutura de pastas vale aqui. `existente` é a do disco de hoje."""
+    return os.environ.get("ARQUIVADOR_ESTRUTURA") or "original"
+
+
+def regra_para_pasta_existente(regra: dict, estrutura: str | None = None) -> dict:
     """
     Adapta uma regra de cliente à estrutura de pasta que já existe no disco.
 
@@ -123,20 +129,29 @@ def regra_para_pasta_existente(regra: dict) -> dict:
     e RECUSA o item se o resultado divergir. Os dois têm de produzir o mesmo
     caminho e o mesmo nome, sempre.
 
+    AS REGRAS `CLIENTE_*` MANTÊM SUAS PASTAS FIXAS (segmentos sem
+    {PLACEHOLDER}). É o que mantém "AGENDAMENTOS" como pasta própria dentro da
+    pasta do cliente, antes do ano. As regras antigas (`MENSAL_*`, `PROJETO_*`)
+    descrevem uma estrutura que ainda não existe no disco e são achatadas.
+
+    `estrutura` vem do payload de quem chamou. Depender só da variável de
+    ambiente significava que um processo sem ela calculava pela regra crua
+    enquanto o chat calculava pela adaptada — e todo item falhava com "o
+    destino mudou desde a proposta", sem dizer que a causa era esta.
+
     Precisa ser aplicável a uma regra avulsa, e não só ao catálogo exportado,
     porque o worker recebe a regra dentro do payload da fila — fotografada do
-    banco, crua. Aplicar a adaptação só na leitura de `dados/regras.json`
-    deixava o worker calculando pela regra original enquanto o chat calculava
-    pela adaptada: todo item falhava com "a regra ou o nome da empresa mudou",
-    e a mensagem não dizia que a causa era esta.
+    banco, crua.
     """
-    if os.environ.get("ARQUIVADOR_ESTRUTURA") != "existente":
+    if (estrutura or estrutura_atual()) != "existente":
         return regra
     if not regra.get("exige_empresa", True):
         return regra
+    fixos = ([s for s in regra.get("caminho_modelo", []) if "{" not in s]
+             if str(regra.get("codigo", "")).startswith("CLIENTE_") else [])
     return {
         **regra,
-        "caminho_modelo": ["{ANO}", "{COMPETENCIA_PASTA}"],
+        "caminho_modelo": [*fixos, "{ANO}", "{COMPETENCIA_PASTA}"],
         "exige_competencia": True,
         "projeto": None,
         "padrao_nome": "{CODIGO}_{EMPRESA}_{COMPETENCIA}_{TIPO_DOCUMENTO}_{INSTITUICAO}_v{VERSAO}.{EXTENSAO}",

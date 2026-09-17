@@ -80,7 +80,9 @@ def executar_item(trabalho: dict, api, config) -> dict:
     # A regra vem CRUA do banco, fotografada na confirmação. O chat analisou
     # com ela adaptada; aqui tem de ser a mesma, senão o destino diverge e o
     # item é recusado logo abaixo.
-    regra = Regra.de_dict(regra_para_pasta_existente(payload["regra"]))
+    # `estrutura` no payload manda quando vier (o chat local já envia); sem
+    # ela, vale o ambiente desta máquina.
+    regra = Regra.de_dict(regra_para_pasta_existente(payload["regra"], payload.get("estrutura")))
     ctx = Contexto(**payload["contexto"])
     resolver_pasta_cliente(config.raiz, regra, ctx)
     destino = montar_destino(regra, ctx)

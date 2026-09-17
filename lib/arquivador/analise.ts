@@ -6,6 +6,7 @@ import {
 } from "./caminhos";
 import { redigirSegredos, verificarBloqueio } from "./bloqueios";
 import { assinaturasDoArquivo, chaveConta } from "./assinatura";
+import { regraDoFluxoDeAgendamentos } from "./fluxo-agendamentos";
 import {
   identificarEmpresa,
   identificarCompetencia,
@@ -491,8 +492,18 @@ async function analisarUm(
   const regraCorrigida = correcao.regraCodigo
     ? (regras.find((r) => r.codigo === correcao.regraCodigo) ?? null)
     : null;
-  const regraFinal = regraCorrigida ?? regra;
+  // Contas a pagar, agendamentos e comprovantes têm pasta própria no cliente.
+  const regraFinal =
+    regraCorrigida ?? regraDoFluxoDeAgendamentos(regra, tipoFinal, anexo.nome_original, regras);
   if (regraCorrigida) registrarInformado("regra", regraCorrigida.codigo);
+  else if (regraFinal && regraFinal !== regra) {
+    evidencias.push({
+      campo: "regra",
+      valor: regraFinal.codigo,
+      origem: "conteudo",
+      detalhe: "Documento do fluxo de agendamentos: vai para a pasta AGENDAMENTOS do cliente.",
+    });
+  }
 
   // O que o usuário resolveu deixa de ser conflito.
   const conflitosAbertos = conflitos.filter((c) => {

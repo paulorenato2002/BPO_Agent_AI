@@ -141,15 +141,30 @@ export function useConversas() {
     [carregar]
   );
 
-  const arquivar = useCallback(
-    async (id: string) => {
-      await fetch(`/api/conversas/${id}`, { method: "DELETE" }).catch(() => {});
+  const encerrar = useCallback(
+    async (id: string, modo: "arquivar" | "excluir") => {
+      const endereco = `/api/conversas/${id}${modo === "excluir" ? "?modo=excluir" : ""}`;
+      try {
+        const resposta = await fetch(endereco, { method: "DELETE" });
+        const dados = await resposta.json().catch(() => ({ ok: resposta.ok }));
+        if (!dados.ok) {
+          setErroAcao(dados.mensagem ?? "Não foi possível concluir. Tente de novo.");
+          return false;
+        }
+      } catch {
+        setErroAcao("Falha de rede. A conversa continua na lista.");
+        return false;
+      }
       setConversaAtivaId((atual) => (atual === id ? null : atual));
       setErroAcao(null);
       await carregar();
+      return true;
     },
     [carregar]
   );
+
+  const arquivar = useCallback((id: string) => encerrar(id, "arquivar"), [encerrar]);
+  const excluir = useCallback((id: string) => encerrar(id, "excluir"), [encerrar]);
 
   /** Atualiza o título localmente quando o servidor o gera na 1ª mensagem. */
   const aplicarTitulo = useCallback((id: string, titulo: string) => {
@@ -174,6 +189,7 @@ export function useConversas() {
     criarConversa,
     renomear,
     arquivar,
+    excluir,
     aplicarTitulo,
   };
 }

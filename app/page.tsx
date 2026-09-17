@@ -119,6 +119,19 @@ export default function Pagina() {
     }
   }
 
+  /** Arquivar ou excluir: se era a conversa aberta, a tela volta ao começo. */
+  async function encerrarConversa(id: string, acao: (id: string) => Promise<boolean>) {
+    const eraAtiva = id === conversas.conversaAtivaId;
+    const feito = await acao(id);
+    if (feito && eraAtiva) {
+      chat.limpar();
+      chat.definirConversa(null);
+      setEntrada("");
+      setAnexos([]);
+      setErroArquivo(null);
+    }
+  }
+
   async function selecionarConversa(id: string) {
     setBarraAberta(false);
     if (id === conversas.conversaAtivaId && !chat.streamando) return;
@@ -149,7 +162,8 @@ export default function Pagina() {
           onNovoChat={novoChat}
           onSelecionar={selecionarConversa}
           onRenomear={conversas.renomear}
-          onArquivar={conversas.arquivar}
+          onArquivar={(id) => encerrarConversa(id, conversas.arquivar)}
+          onExcluir={(id) => encerrarConversa(id, conversas.excluir)}
         />
       )}
 

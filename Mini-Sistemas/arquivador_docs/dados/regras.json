@@ -1,6 +1,6 @@
 {
   "_aviso": "ARQUIVO GERADO. Não edite à mão — regenere com `npm run exportar:regras` no projeto Agente BPO. A fonte de verdade é o banco.",
-  "geradoEm": "2026-09-09T18:37:51.023Z",
+  "geradoEm": "2026-09-17T18:14:01.621Z",
   "regras": [
     {
       "codigo": "INTERNO_COMERCIAL_PRECIFICACAO",
@@ -88,6 +88,22 @@
       "padrao_nome": "{TIPO_DOCUMENTO}_{DATA_DOCUMENTO}_v{VERSAO}.{EXTENSAO}",
       "exige_empresa": false,
       "exige_competencia": false,
+      "exige_instituicao": false,
+      "projeto": null,
+      "subcategoria": null
+    },
+    {
+      "codigo": "CLIENTE_AGENDAMENTOS",
+      "nome": "Agendamentos e contas a pagar do cliente",
+      "escopo": "mensal",
+      "caminho_modelo": [
+        "AGENDAMENTOS",
+        "{ANO}",
+        "{COMPETENCIA}"
+      ],
+      "padrao_nome": "{CODIGO}_{COMPETENCIA}_{TIPO_DOCUMENTO}_{INSTITUICAO}_v{VERSAO}.{EXTENSAO}",
+      "exige_empresa": true,
+      "exige_competencia": true,
       "exige_instituicao": false,
       "projeto": null,
       "subcategoria": null

@@ -2,6 +2,7 @@ import { usuarioAtual } from "@/lib/auth/usuario";
 import {
   renomearConversa,
   arquivarConversa,
+  excluirConversa,
   restaurarConversa,
 } from "@/lib/repositorios/conversas";
 
@@ -40,12 +41,19 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/conversas/
   return Response.json(r, { status: r.ok ? 200 : 404 });
 }
 
-/** Arquiva (não apaga) — o histórico operacional é preservado. */
-export async function DELETE(_request: Request, ctx: RouteContext<"/api/conversas/[id]">) {
+/**
+ * Arquiva ou exclui. Nos dois casos a conversa sai da lista e do agente; o
+ * registro continua no banco, que é o que o schema chama de exclusão lógica.
+ * `?modo=excluir` é a exclusão pedida pelo usuário.
+ */
+export async function DELETE(request: Request, ctx: RouteContext<"/api/conversas/[id]">) {
   const usuario = await usuarioAtual();
   if (!usuario) return SEM_SESSAO;
 
   const { id } = await ctx.params;
-  const r = await arquivarConversa(usuario.id, id);
+  const modo = new URL(request.url).searchParams.get("modo");
+  const r = modo === "excluir"
+    ? await excluirConversa(usuario.id, id)
+    : await arquivarConversa(usuario.id, id);
   return Response.json(r, { status: r.ok ? 200 : 404 });
 }
