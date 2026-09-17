@@ -35,7 +35,7 @@ def test_base64_invalido():
 def test_nao_pdf_bloqueia_sem_quebrar():
     r = executar({"arquivos": [arquivo("planilha.pdf", b"isto nao e pdf")]})
     assert r["ok"] is False
-    assert any("leitura interrompida" in e for e in r["erros"])
+    assert any("não é um PDF válido" in e for e in r["erros"])
     assert "relatorio_markdown" not in r
 
 
@@ -56,6 +56,35 @@ def test_uso_errado():
     assert p.returncode == 2
 
 
+def test_formato_nao_lido():
+    r = executar({"arquivos": [arquivo("foto.png", b"x")]})
+    assert r["ok"] is False and "não é lido" in r["erros"][0]
+
+
+def test_xls_antigo_pede_xlsx():
+    r = executar({"arquivos": [arquivo("vt.xls", b"x")]})
+    assert any("salve como .xlsx" in e for e in r["erros"])
+
+
+def test_so_lista_sem_contas_a_pagar_e_recusado():
+    r = executar({"arquivos": [arquivo("vt.txt", "Ana Lima 150,00".encode())], "dados_texto": "VA Ana 10,00"})
+    assert r["ok"] is False and "Envie um contas a pagar" in " ".join(r["erros"])
+    assert [d["tipo"] for d in r["documentos"]] == ["planilha de VT", "planilha de VA"]
+
+
+def test_amostra_com_dados_da_mensagem():
+    arq = AMOSTRAS / "esperado.json"
+    if not arq.exists():
+        pytest.skip("Amostras privadas não instaladas (não versionadas).")
+    contas = next(p for p in AMOSTRAS.glob("*.pdf") if "CONTAS" in p.name.upper())
+    r = executar({"arquivos": [arquivo(contas.name, contas.read_bytes())], "empresa": "teste",
+                  "dados_texto": "VT\nPessoa Inexistente Exemplo - R$ 12,34"})
+    assert r["ok"] is True, r["erros"]
+    assert r["empresa"] == "teste"
+    assert "planilha de VT" in r["relatorio_markdown"]
+    assert "*TESTE | Contas a pagar" in r["mensagem_whatsapp"]
+
+
 def test_amostras_pelo_processo():
     arq = AMOSTRAS / "esperado.json"
     if not arq.exists():
@@ -73,7 +102,8 @@ def test_amostras_pelo_processo():
         assert len(r["documentos"]) == 3 and all(d["validado"] for d in r["documentos"])
         assert r["relatorio_markdown"].strip()
         linhas = r["mensagem_whatsapp"].splitlines()
-        assert linhas[0].endswith("@Cliente Exemplo")
+        assert linhas[0].endswith("@Cliente Exemplo!")
+        assert r["empresa"] == grupo and linhas[2].startswith(f"*{grupo} | ")
         assert "Observação de teste." in r["mensagem_whatsapp"]
         # Divergência não vai para o texto do cliente; vai para as pendências.
         assert r["pendencias_antes_de_enviar"]

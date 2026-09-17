@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import pytest
@@ -21,7 +22,8 @@ def test_interface_amostras(posicao):
     assert len(at.tabs) == 4
     assert at.session_state["resultado"]["relatorio"] is not None
     assert any("conferência entre" in m.value or "Tudo confere" in m.value for m in at.markdown)
-    assert at.code[0].value.splitlines()[1].startswith("Segue abaixo o contas a pagar do período de")
+    # Empresa pelo prefixo do arquivo ("L2H - CONTAS A PAGAR...").
+    assert re.fullmatch(r"\*[A-Z0-9]+ \| Contas a pagar de \d\d/\d\d a \d\d/\d\d\*", at.code[0].value.splitlines()[2])
     at.text_area[0].set_value("Novo cenário").run()
     assert "resultado" not in at.session_state
 

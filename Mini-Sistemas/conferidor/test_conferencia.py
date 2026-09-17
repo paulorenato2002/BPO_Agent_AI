@@ -8,7 +8,7 @@ from conferencia import conferir_tres, cpf_compativel
 from core import Documento, Item, ler_pdf
 
 AMOSTRAS = Path(__file__).parent / "docs_amostra"
-VENC = "10/09/2026"
+VENC = "05/09/2026"  # dia de folha: 28 ao 08
 
 
 def doc(tipo, itens, periodo=None):
@@ -238,3 +238,132 @@ def test_observacao_desmentida_pelo_banco_e_sem_relacao():
     assert "atenção" in r.observacoes[0]["efeito"]
     assert r.observacoes[1]["efeito"] == "não citou nenhum lançamento; vai só na mensagem"
     assert "### Suas observações" in r.markdown()
+
+
+# ------------------------------------------------------------------ janela da folha, categorias e listas
+
+QUINZENA = ["11/09/2026", "20/09/2026"]
+
+
+def test_folha_fora_da_janela_nao_entra_e_encargo_nao_e_folha():
+    c = doc("contas", [conta("1", "6/9 - INSS", 76543, "INSS sobre Salários - GPS", data="18/09/2026"),
+                       conta("2", "ALUGUEL", 26500, "Aluguel", "IMOVEIS SOL", data="18/09/2026")], QUINZENA)
+    f = doc("folha", [folha("1", "ANA PAULA SOUZA LIMA", 150000, "123.456.789-01")])
+    b = doc("itau", [banco("1", "RECEITA FED-DARF NUMERADO-CB", 76543, data="18/09/2026"),
+                     banco("2", "IMOVEIS SOL LTDA", 26500, data="18/09/2026")], ["11/09/2026", "11/10/2026"])
+    r = conferir_tres(c, b, f)
+    assert not r.divergentes
+    assert not r.tem_folha and r.folha_fora_do_periodo
+    assert "O extrato da folha não entrou" in r.pontos[0]
+    assert not any("não traz nenhum pagamento da folha" in p for p in r.pontos)
+    assert not any(l.de_folha for l in r.linhas)
+
+
+def test_salario_em_dia_de_folha_continua_conferido():
+    c = doc("contas", [conta("1", "SALÁRIO - ANA PAULA SOUZA", 150000, data="30/09/2026")],
+            ["25/09/2026", "05/10/2026"])
+    f = doc("folha", [folha("1", "ANA PAULA SOUZA LIMA", 160000)])
+    r = conferir_tres(c, None, f)
+    assert tipos(r) == ["valor_folha"]
+
+
+def test_categoria_indica_o_favorecido_e_troca_o_par_errado():
+    """FGTS com fornecedor Receita é pago à Caixa; o INSS vai para o DARF."""
+    c = doc("contas", [conta("1", "6/9 - FGTS", 104321, "FGTS e Multa de FGTS", "RECEITA FEDERAL", "18/09/2026"),
+                       conta("2", "6/9 - INSS", 76543, "INSS sobre Salários - GPS", data="18/09/2026")], QUINZENA)
+    b = doc("itau", [banco("1", "RECEITA FED-DARF NUMERADO-CB", 76543, data="18/09/2026"),
+                     banco("2", "CAIXA ECONOMICA FEDERAL", 104321, data="18/09/2026")], QUINZENA)
+    r = conferir_tres(c, b)
+    assert not r.divergentes
+    pares = {l.conta.id: l.banco.id for l in r.linhas if l.conta}
+    assert pares == {"1": "2", "2": "1"}
+    assert not any("só pelo valor" in p for p in r.pontos)
+
+
+def test_troca_de_complementos_sem_dica_de_categoria():
+    c = doc("contas", [conta("1", "Serviço A", 10000, "Serviços", "GAMA COMERCIO", "15/09/2026"),
+                       conta("2", "Serviço B", 7000, "Serviços", "", "15/09/2026")], QUINZENA)
+    b = doc("itau", [banco("1", "GAMA COMERCIO E SERVICOS", 7000, data="15/09/2026"),
+                     banco("2", "DELTA PAGAMENTOS", 10000, data="15/09/2026")], QUINZENA)
+    r = conferir_tres(c, b)
+    assert not r.divergentes
+    assert sum("só pelo valor" in p for p in r.pontos) >= 1
+
+
+def test_pago_no_banco_sem_conta_em_aberto_vira_ponto():
+    c = doc("contas", [conta("1", "Aluguel", 26500, "Aluguel", "IMOVEIS SOL", "15/09/2026")], QUINZENA)
+    b = doc("itau", [banco("1", "IMOVEIS SOL", 26500, data="15/09/2026"),
+                     banco("2", "LOJA OMEGA", 310000, data="11/09/2026", situacao="Efetuado")], QUINZENA)
+    r = conferir_tres(c, b)
+    assert not r.divergentes
+    assert any("Já pagos no banco" in p and "LOJA OMEGA" in p for p in r.pontos)
+    assert not any("sem explicação" in t for t in r.explicacao)
+    assert r.markdown().startswith("**Tudo confere.** O pagamento bate entre o contas a pagar e os agendamentos.")
+
+
+def lista(rotulo, itens):
+    return Documento(f"{rotulo}.xlsx", rotulo, "lista", 1,
+                     [Item(str(n), nome, valor, descricao=rotulo) for n, (nome, valor) in enumerate(itens, 1)],
+                     total_impresso=sum(v for _, v in itens), rotulo=rotulo)
+
+
+def test_vt_pessoa_a_pessoa():
+    c = doc("contas", [conta("1", "VT - ANA LIMA", 15000, "Vale-transporte", "EMPRESA X", "05/09/2026"),
+                       conta("2", "VT - BRUNO REIS", 18000, "Vale-transporte", "EMPRESA X", "05/09/2026"),
+                       conta("3", "Aluguel", 26500, "Aluguel", "IMOVEIS SOL", "05/09/2026")])
+    vt = lista("VT", [("Ana Lima", 15000), ("Bruno Reis", 20000), ("Carla Dias", 9000)])
+    r = conferir_tres(c, listas=[vt])
+    assert sorted(d["tipo"] for l in r.divergentes for d in l.divergencias) == ["lista_sem_conta", "valor_lista"]
+    assert r.listas[0]["modo"] == "pessoa" and r.listas[0]["conferem"] == 1
+    assert all(l.conta is None or l.conta.id != "3" for l in r.linhas)   # sem banco, aluguel não entra
+    md = r.markdown()
+    assert "Planilha/lista" in md and "a planilha de VT" in md and "### Planilhas e listas" in md
+
+
+def test_va_pelo_total_da_operadora():
+    c = doc("contas", [conta("1", "Recarga setembro", 70000, "Benefícios", "ALELO", "05/09/2026")])
+    va = lista("VA", [("Ana Lima", 40000), ("Bruno Reis", 40000)])
+    r = conferir_tres(c, listas=[va])
+    [l] = r.divergentes
+    assert l.divergencias[0]["tipo"] == "total_lista" and l.divergencias[0]["diferenca"] == 10000
+    assert r.listas[0]["modo"] == "total"
+    ok = conferir_tres(c, listas=[lista("VA", [("Ana Lima", 40000), ("Bruno Reis", 30000)])])
+    assert not ok.divergentes and "Confere." in ok.markdown()
+
+
+def test_lista_sem_lancamento_no_contas():
+    c = doc("contas", [conta("1", "Aluguel", 26500, "Aluguel", "IMOVEIS SOL", "05/09/2026")])
+    b = doc("itau", [banco("1", "IMOVEIS SOL", 26500, data="05/09/2026")])
+    r = conferir_tres(c, b, listas=[lista("VT", [("Ana Lima", 15000)])])
+    [l] = r.divergentes
+    assert l.divergencias[0]["tipo"] == "lista_sem_conta" and l.soma_contas is None
+
+
+def test_lista_sem_rotulo_confere_com_todas_as_contas():
+    c = doc("contas", [conta("1", "Consultoria", 50000, "Serviços", "EMPRESA ALFA", "15/09/2026")])
+    avulsa = lista("", [("Empresa Alfa", 50000), ("Fornecedor Beta", 9990)])
+    r = conferir_tres(c, listas=[avulsa])
+    assert [d["tipo"] for l in r.divergentes for d in l.divergencias] == ["lista_sem_conta"]
+    assert "a lista enviada" in r.markdown()
+
+
+def novos():
+    pasta = AMOSTRAS / "novos"
+    arq = pasta / "esperado.json"
+    if not arq.exists():
+        pytest.skip("Amostras privadas não instaladas (não versionadas).")
+    return pasta, json.loads(arq.read_text(encoding="utf-8"))
+
+
+def test_amostras_novas():
+    pasta, esperado = novos()
+    for caso in esperado:
+        ds = {}
+        for nome in caso["arquivos"]:
+            d = ler_pdf(nome, (pasta / nome).read_bytes())
+            ds[d.tipo] = d
+        r = conferir_tres(ds["contas"], ds.get("itau") or ds.get("sicoob"), ds.get("folha"))
+        obtidas = sorted([d["tipo"], d["diferenca"]] for l in r.linhas for d in l.divergencias)
+        assert obtidas == sorted(caso["divergencias"]), caso["nome"]
+        assert sum(l.ja_pago for l in r.linhas) == caso["ja_pagos"], caso["nome"]
+        assert not any("sem explicação" in t for t in r.explicacao), caso["nome"]

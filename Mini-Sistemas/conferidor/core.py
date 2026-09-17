@@ -52,6 +52,7 @@ class Documento:
     cnpj: str = ""
     periodo: list[str] = field(default_factory=list)
     alertas: list[str] = field(default_factory=list)
+    rotulo: str = ""
 
     @property
     def total(self):

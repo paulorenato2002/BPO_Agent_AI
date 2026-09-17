@@ -10,9 +10,10 @@ from __future__ import annotations
 import re
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 
 from core import Documento, Item, brl, norm
+from fontes import BENEFICIOS, fala_de
 
 ROTULOS_FOLHA = ("SALARIO", "BOLSA ESTAGIO", "ESTAGIARIO", "REMUNERACAO FUNCION", "REMUNERACAO DE FUNCION",
                  "PRO LABORE", "PENSAO", "FERIAS", "RESCISAO", "EXTRA FOLHA")
@@ -33,14 +34,56 @@ RE_PESSOA = re.compile(
     re.I,
 )
 
+# Guias da folha (INSS, FGTS...) são pagas ao governo, não às pessoas.
+ROTULOS_ENCARGOS = ("INSS", "FGTS", "IRRF", "GPS", "DARF", "DCTFWEB", "CONTRIBUICAO SINDICAL", "SINDICATO")
+
+# Salários, pró-labore e afins são pagos do dia 28 ao dia 8.
+DIA_FOLHA_INICIO, DIA_FOLHA_FIM = 28, 8
+
+# Categoria do contas a pagar → como o favorecido aparece no banco (só com o mesmo valor).
+DICAS_FAVORECIDO = (
+    (("FGTS",), ("CAIXA", "FGTS")),
+    (("INSS", "GPS", "DARF", "IRRF", "IRPJ", "CSLL", "PIS", "COFINS", "SIMPLES NACIONAL", "DAS", "DCTFWEB",
+      "RECEITA FEDERAL", "IMPOSTO DE RENDA"),
+     ("RECEITA", "DARF", "FAZENDA NACIONAL", "INSS", "SIMPLES", "DAS", "GPS")),
+    (("IPTU", "ISS", "ISSQN", "TFE", "TLF", "ALVARA"), ("PREFEITURA", "MUNICIPIO", "SEFIN", "SEFAZ", "GDF")),
+    (("ICMS", "IPVA", "DETRAN", "LICENCIAMENTO", "DIFAL"), ("SEFAZ", "SECRETARIA", "FAZENDA", "DETRAN", "GDF")),
+)
+
 CONFIANCA_POR_VALOR = 40
+BONUS_MESMO_VALOR = 25
 
 
 # ------------------------------------------------------------------ identificação
 
+def eh_encargo(item: Item) -> bool:
+    texto = f" {norm(item.categoria + ' ' + item.descricao)} "
+    return any(f" {r} " in texto for r in ROTULOS_ENCARGOS)
+
+
 def eh_folha(item: Item) -> bool:
     texto = norm(item.categoria + " " + item.descricao)
-    return any(r in texto for r in ROTULOS_FOLHA)
+    return any(r in texto for r in ROTULOS_FOLHA) and not eh_encargo(item)
+
+
+def na_janela_folha(data: str) -> bool:
+    d = _data(data)
+    return d is None or d.day >= DIA_FOLHA_INICIO or d.day <= DIA_FOLHA_FIM
+
+
+def eh_folha_do_periodo(item: Item) -> bool:
+    """Lançamento de folha com vencimento em dia de folha. Fora disso é pagamento comum."""
+    return eh_folha(item) and na_janela_folha(item.data)
+
+
+def periodo_tem_folha(periodo: list[str]) -> bool:
+    """O período (início, fim) inclui algum dia de pagamento da folha? Sem período, sim."""
+    a, b = (_data(x) for x in (list(periodo) + ["", ""])[:2])
+    if not a or not b or b < a:
+        return True
+    if (b - a).days >= 31:
+        return True
+    return any(na_janela_folha((a + timedelta(days=n)).strftime("%d/%m/%Y")) for n in range((b - a).days + 1))
 
 
 ROTULOS_SOCIO = ("DISTRIBUICAO DE LUCRO", "DEVOLUCAO DE APORTE", "DEVOLUCOES DE APORTE")
@@ -129,7 +172,19 @@ def pontuar(a: Ref, b: Ref, relacionado: bool) -> int:
         return 100
     if cpf_compativel(a.documento, b.documento) is False:
         return 0
-    return max(_pontuar_nome(a, b), _pontuar_descricao(a, b))
+    return max(_pontuar_nome(a, b), _pontuar_descricao(a, b), _pontuar_categoria(a, b))
+
+
+def _pontuar_categoria(a: Ref, b: Ref) -> int:
+    """Guia paga a outro favorecido (FGTS à Caixa, INSS à Receita): categoria + mesmo valor."""
+    if a.item.valor != b.item.valor:
+        return 0
+    texto = f" {norm(' '.join((a.item.categoria, a.item.descricao, a.item.nome)))} "
+    favorecido = f" {norm(b.nome)} "
+    for chaves, favorecidos in DICAS_FAVORECIDO:
+        if any(f" {c} " in texto for c in chaves) and any(f" {f} " in favorecido for f in favorecidos):
+            return 75
+    return 0
 
 
 def _pontuar_descricao(a: Ref, b: Ref) -> int:
@@ -193,10 +248,11 @@ def casar(origens: list[Ref], destinos: list[Ref], relacoes: dict[str, str],
             relacionado = norm(b.nome) in (rel.get(norm(a.nome)), rel.get(norm(a.item.descricao)))
             s = pontuar(a, b, relacionado)
             if s:
-                pares.append((s, a.item.valor == b.item.valor, a, b))
-    pares.sort(key=lambda p: (-p[0], not p[1]))
+                pares.append((s + (BONUS_MESMO_VALOR if a.item.valor == b.item.valor else 0), s, a, b))
+    # O valor igual pesa: um nome parecido com outro valor não tira o par exato de ninguém.
+    pares.sort(key=lambda p: -p[0])
     usados_a, usados_b, res = set(), set(), {}
-    for s, _, a, b in pares:
+    for _, s, a, b in pares:
         if a.chave in usados_a or b.chave in usados_b:
             continue
         res[a.chave] = (b, s)
@@ -204,6 +260,10 @@ def casar(origens: list[Ref], destinos: list[Ref], relacoes: dict[str, str],
         usados_b.add(b.chave)
 
     if por_valor:
+        _trocar_complementos(res, origens, destinos)
+        usados_a = set(res)
+        usados_b = {b.chave for b, _ in res.values()}
+
         def unir(a, b):
             res[a.chave] = (b, CONFIANCA_POR_VALOR)
             usados_a.add(a.chave)
@@ -236,6 +296,35 @@ def casar(origens: list[Ref], destinos: list[Ref], relacoes: dict[str, str],
                     unir(a, b)
                     mudou = True
     return res
+
+
+def _trocar_complementos(res: dict[str, tuple[Ref, int]], origens: list[Ref], destinos: list[Ref]) -> None:
+    """Par com valores diferentes cujo "complemento" sobrou dos dois lados.
+
+    Ex.: o FGTS (fornecedor "Receita Federal") casado pelo nome com o DARF do
+    INSS, enquanto sobram o PIX à Caixa com o valor do FGTS e o INSS com o valor
+    do DARF. Trocar fecha os dois pelo valor exato em vez de mostrar três
+    divergências.
+    """
+    usados_b = {b.chave for b, _ in res.values()}
+    livres_a = [a for a in origens if a.chave not in res]
+    livres_b = [b for b in destinos if b.chave not in usados_b]
+    for a in origens:
+        if a.chave not in res:
+            continue
+        b, _ = res[a.chave]
+        if a.item.valor == b.item.valor:
+            continue
+        b2 = next((x for x in livres_b if x.item.valor == a.item.valor
+                   and cpf_compativel(a.documento, x.documento) is not False), None)
+        a2 = next((x for x in livres_a if x.item.valor == b.item.valor
+                   and cpf_compativel(x.documento, b.documento) is not False), None)
+        if not (a2 and b2):
+            continue
+        res[a.chave] = (b2, pontuar(a, b2, False) or CONFIANCA_POR_VALOR)
+        res[a2.chave] = (b, pontuar(a2, b, False) or CONFIANCA_POR_VALOR)
+        livres_a.remove(a2)
+        livres_b.remove(b2)
 
 
 def agrupar(contas: list[Ref], banco: list[Ref]) -> list[tuple[list[Ref], list[Ref]]]:
@@ -278,6 +367,12 @@ class Linha:
     divergencias: list[dict] = field(default_factory=list)
     avisos: list[str] = field(default_factory=list)
     justificativa: str = ""
+    # Planilha/lista (VT, VA...): o item dela, ou a soma quando a comparação é pelo total.
+    lista: Item | None = None
+    rotulo_lista: str = ""
+    soma_lista: int | None = None
+    soma_contas: int | None = None
+    ja_pago: bool = False
 
     @property
     def confere(self) -> bool:
@@ -297,10 +392,20 @@ class Relatorio:
     observacoes: list[dict] = field(default_factory=list)
     folha_em_apuracao: bool = False
     periodo: list[str] = field(default_factory=list)
+    listas: list[dict] = field(default_factory=list)
+    folha_fora_do_periodo: bool = False
 
     @property
     def divergentes(self) -> list[Linha]:
         return [l for l in self.linhas if l.divergencias]
+
+    @property
+    def conferem(self) -> list[Linha]:
+        return [l for l in self.linhas if not l.divergencias and not l.ja_pago and (l.conta or l.folha or l.lista)]
+
+    @property
+    def tem_lista(self) -> bool:
+        return bool(self.listas)
 
     def markdown(self) -> str:
         return renderizar(self)
@@ -308,20 +413,38 @@ class Relatorio:
 
 def conferir_tres(contas: Documento, banco: Documento | None = None, folha: Documento | None = None,
                   relacoes: dict[str, str] | None = None, aceitar_data_sicoob: bool = True,
-                  observacoes: str = "") -> Relatorio:
-    """Sem banco: só as contas de folha entram (as demais são desconsideradas)."""
+                  observacoes: str = "", listas: list[Documento] | None = None) -> Relatorio:
+    """Sem banco: só entram as contas de folha e as das listas (as demais são desconsideradas).
+
+    A folha só é conferida quando o período do contas a pagar inclui dia de
+    pagamento dela (dia 28 ao dia 8).
+    """
     relacoes = relacoes or {}
-    if not (banco or folha):
-        raise ValueError("Envie o extrato da folha, os agendamentos do banco ou os dois.")
+    listas = listas or []
+    if not (banco or folha or listas):
+        raise ValueError("Envie os agendamentos do banco, o extrato da folha ou uma planilha/lista.")
+
+    folha_fora = bool(folha) and bool(contas.periodo) and not periodo_tem_folha(contas.periodo)
+    if folha_fora:
+        folha = None
 
     proprios = fornecedores_proprios(contas.itens)
-    contas_itens = [i for i in contas.itens if banco or eh_folha(i)]
+
+    def entra(i: Item) -> bool:
+        if banco:
+            return True
+        if folha and eh_folha_do_periodo(i):
+            return True
+        return any(not l.rotulo or fala_de(l.rotulo, i) for l in listas)
+
+    contas_itens = [i for i in contas.itens if entra(i)]
     periodo = [_data(x) for x in banco.periodo] if banco and len(banco.periodo) == 2 else None
 
     m_cf = {}
     if folha:
         # A pensão não é linha própria no extrato: fica fora deste cruzamento.
-        m_cf = casar([Ref(i.id, i, pessoa_da_descricao(i) or i.nome) for i in contas_itens if eh_folha(i) and not eh_pensao(i)],
+        m_cf = casar([Ref(i.id, i, pessoa_da_descricao(i) or i.nome) for i in contas_itens
+                      if eh_folha_do_periodo(i) and not eh_pensao(i)],
                      [Ref(i.id, i, i.nome) for i in folha.itens if i.valor > 0], relacoes)
     datas_ok = banco is not None and (banco.tipo != "sicoob" or aceitar_data_sicoob)
     m_cb, grupos = {}, []
@@ -349,7 +472,8 @@ def conferir_tres(contas: Documento, banco: Documento | None = None, folha: Docu
         pessoa = (f[0].item.nome if f else None) or (nome_do_banco(b[0].item) if b and not eh_pensao(c) else None) or nome_conta
         d = _data(c.data)
         fora = bool(periodo and d and all(periodo) and not (periodo[0] <= d <= periodo[1]))
-        linha = Linha(pessoa, c, f[0].item if f else None, b[0].item if b else None, de_folha=eh_folha(c),
+        linha = Linha(pessoa, c, f[0].item if f else None, b[0].item if b else None,
+                      de_folha=bool(folha or banco) and eh_folha_do_periodo(c),
                       fora_do_periodo=fora, confianca=min([x[1] for x in (f, b) if x] or [100]), nome_conta=nome_conta)
         if b and b[1] == CONFIANCA_POR_VALOR and not eh_pensao(c):
             banco_b = b[0].item
@@ -400,17 +524,130 @@ def conferir_tres(contas: Documento, banco: Documento | None = None, folha: Docu
     tem_folha_a_pagar = any(l.de_folha for l in linhas)
     banco_cobre_folha = bool(banco) and (folha_no_banco or not tem_folha_a_pagar)
 
+    resumos = [_conferir_lista(lista, linhas, proprios, relacoes) for lista in listas]
+
     lidas, folha_em_apuracao = _ler_observacoes(observacoes, linhas)
     cobre = banco_cobre_folha and not folha_em_apuracao
     for l in linhas:
         _classificar(l, folha is not None, banco is not None, cobre, datas_ok)
     _efeito_observacoes(lidas, linhas, folha_em_apuracao)
 
+    pontos = _pontos(linhas, banco, folha, proprios, banco_cobre_folha or folha_em_apuracao, datas_ok)
+    if folha_fora:
+        pontos.insert(0, f"O extrato da folha não entrou: o período do contas a pagar ({' a '.join(contas.periodo)}) "
+                         f"não inclui dia de pagamento da folha (dia {DIA_FOLHA_INICIO} ao dia {DIA_FOLHA_FIM:02d}).")
     return Relatorio(folha is not None, banco is not None, banco_cobre_folha, linhas,
                      _fechamento(linhas, banco, folha, cobre),
                      _explicacao(linhas, banco, cobre),
-                     _pontos(linhas, banco, folha, proprios, banco_cobre_folha or folha_em_apuracao, datas_ok),
-                     _acoes(linhas, contas, banco, folha), lidas, folha_em_apuracao, contas.periodo)
+                     pontos,
+                     _acoes(linhas, contas, banco, folha), lidas, folha_em_apuracao, contas.periodo,
+                     resumos, folha_fora)
+
+
+# ------------------------------------------------------------------ planilhas e listas
+
+NOMES_ROTULO = {"VT": "vale-transporte", "VA": "vale-alimentação", "VR": "vale-refeição"}
+
+
+def nome_da_lista(rotulo: str) -> str:
+    return f"planilha de {rotulo}" if rotulo else "lista enviada"
+
+
+def _pessoa_do_beneficio(item: Item, proprios: set[str]) -> str:
+    """ "VT - FULANO" vira FULANO; sem nome na descrição, o fornecedor (se não for a própria empresa)."""
+    texto = f" {norm(descricao_limpa(item))} "
+    for chaves in BENEFICIOS.values():
+        for c in chaves:
+            texto = texto.replace(f" {c} ", " ")
+    if tokens(texto):
+        return texto.strip()
+    return item.nome if item.nome and norm(item.nome) not in proprios else ""
+
+
+def _conferir_lista(lista: Documento, linhas: list[Linha], proprios: set[str], relacoes: dict[str, str]) -> dict:
+    """Planilha de VT/VA (ou lista colada) × contas a pagar.
+
+    Pessoa a pessoa quando o contas a pagar tem um lançamento por pessoa; pelo
+    total quando o benefício é pago numa conta só (a operadora). Lista sem
+    rótulo é comparada com todas as contas, pessoa a pessoa.
+    """
+    rot = lista.rotulo
+    alvo = [l for l in linhas if l.conta and (fala_de(rot, l.conta) if rot else True)]
+    nome = nome_da_lista(rot)
+    resumo = {"rotulo": rot, "arquivo": lista.arquivo, "itens": len(lista.itens), "total": lista.total,
+              "contas": len(alvo), "soma_contas": sum(l.conta.valor for l in alvo)}
+    refs_c = [Ref(str(k), l.conta, (_pessoa_do_beneficio(l.conta, proprios) if rot else l.nome_conta),
+                  descricao=descricao_limpa(l.conta)) for k, l in enumerate(alvo)]
+    m = casar([Ref(i.id, i, i.nome) for i in lista.itens], refs_c, relacoes)
+    por_pessoa = not rot or (len(m) >= 1 and 2 * len(m) >= len(lista.itens))
+
+    if por_pessoa:
+        resumo["modo"] = "pessoa"
+        casadas = set()
+        for item in lista.itens:
+            par = m.get(item.id)
+            if not par:
+                if not rot:
+                    nova = Linha(item.nome, lista=item)
+                    nova.divergencias.append({
+                        "tipo": "lista_sem_conta", "diferenca": item.valor,
+                        "situacao": f"Na {nome}, sem conta a pagar",
+                        "acao": f"lançar **{item.nome}** no contas a pagar com **{brl(item.valor)}**, "
+                                "ou confirmar se já foi pago"})
+                    linhas.append(nova)
+                    continue
+                nova = Linha(item.nome, lista=item, rotulo_lista=rot)
+                nova.divergencias.append({
+                    "tipo": "lista_sem_conta", "diferenca": item.valor,
+                    "situacao": f"Na {nome}, sem conta a pagar",
+                    "acao": f"lançar o {rot} de **{item.nome}** no contas a pagar com **{brl(item.valor)}**"})
+                linhas.append(nova)
+                continue
+            l = alvo[int(par[0].chave)]
+            casadas.add(id(l))
+            l.lista, l.rotulo_lista = item, rot
+            if l.conta.valor != item.valor:
+                d = item.valor - l.conta.valor
+                l.divergencias.append({
+                    "tipo": "valor_lista", "diferenca": d,
+                    "situacao": f"**{brl(abs(d))} a {'menor' if d > 0 else 'maior'}** no contas a pagar que na {nome}",
+                    "acao": f"corrigir o contas a pagar de **{l.pessoa}** de {brl(l.conta.valor)} para "
+                            f"**{brl(item.valor)}**, ou a {nome}"})
+            elif par[1] in (CONFIANCA_POR_VALOR, 50):
+                l.avisos.append(f"**{l.pessoa}**: associado a **{item.nome}** da {nome} por nome parcial. Confirme.")
+        if rot:
+            for l in alvo:
+                if id(l) not in casadas:
+                    l.rotulo_lista = rot
+                    l.divergencias.append({
+                        "tipo": "conta_sem_lista", "diferenca": -l.conta.valor,
+                        "situacao": f"Lançamento de {rot} que não está na {nome}",
+                        "acao": f"conferir o {rot} de **{l.pessoa}** ({brl(l.conta.valor)}): não está na {nome}"})
+        resumo["conferem"] = sum(1 for i in lista.itens if i.id in m
+                                 and alvo[int(m[i.id][0].chave)].conta.valor == i.valor)
+        return resumo
+
+    resumo["modo"] = "total"
+    for l in alvo:
+        l.rotulo_lista = rot
+    if lista.total == resumo["soma_contas"]:
+        return resumo
+    linha = Linha(f"{rot} — total da {nome}", rotulo_lista=rot, soma_lista=lista.total,
+                  soma_contas=resumo["soma_contas"] if alvo else None)
+    d = lista.total - resumo["soma_contas"]
+    if alvo:
+        linha.divergencias.append({
+            "tipo": "total_lista", "diferenca": d,
+            "situacao": f"Contas a pagar **{brl(abs(d))} a {'menor' if d > 0 else 'maior'}** que a {nome}",
+            "acao": f"ajustar o {NOMES_ROTULO.get(rot, rot)} no contas a pagar de {brl(resumo['soma_contas'])} "
+                    f"para **{brl(lista.total)}**, ou corrigir a {nome}"})
+    else:
+        linha.divergencias.append({
+            "tipo": "lista_sem_conta", "diferenca": lista.total,
+            "situacao": f"Nenhum lançamento de {rot} no contas a pagar",
+            "acao": f"lançar o {NOMES_ROTULO.get(rot, rot)} de **{brl(lista.total)}** no contas a pagar"})
+    linhas.append(linha)
+    return resumo
 
 
 # ------------------------------------------------------------------ observações do operador
@@ -505,7 +742,9 @@ def _classificar(l: Linha, tem_folha: bool, tem_banco: bool, banco_cobre_folha: 
             and not l.justificativa and (banco_cobre_folha or not l.de_folha)):
         div.append({"tipo": "faltou_agendar", "diferenca": -c.valor, "situacao": "**Faltou agendar**",
                     "acao": f"agendar **{brl(c.valor)}** para **{l.pessoa}**" + (f" (vencimento {c.data})" if c.data else "")})
-    if b and not c and not f:
+    if b and not c and not f and "efetuad" in (b.situacao or "").lower():
+        l.ja_pago = True          # já saiu do banco; o Conta Azul costuma listar só o que está em aberto
+    elif b and not c and not f:
         div.append({"tipo": "banco_sem_conta", "diferenca": b.valor, "situacao": "Agendado sem conta a pagar",
                     "acao": f"conferir o agendamento de **{l.pessoa}** ({brl(b.valor)}): não há conta a pagar correspondente"})
     dc, db = (_data(c.data), _data(b.data)) if c and b else (None, None)
@@ -559,6 +798,9 @@ def _explicacao(linhas, banco, banco_cobre_folha):
         if c and b and b.valor < c.valor and not any(d["tipo"] == "valor_banco" for d in l.divergencias):
             texto.append(f"{l.pessoa}: desconto de {brl(c.valor - b.valor)} no agendamento")
             explicado += c.valor - b.valor
+        if l.ja_pago:
+            texto.append(f"{l.pessoa}: {brl(b.valor)} já pago no banco, sem conta em aberto no contas a pagar")
+            explicado -= b.valor
         if c and not b and l.debito_automatico and not l.fora_do_periodo:
             texto.append(f"{l.pessoa}: {brl(c.valor)} em débito automático, sem agendamento")
             explicado += c.valor
@@ -575,7 +817,7 @@ def _pontos(linhas, banco, folha, proprios, banco_cobre_folha, datas_ok):
     if banco and not banco_cobre_folha:
         folha_linhas = [l for l in linhas if l.de_folha]
         total = _soma(l.folha or l.conta for l in folha_linhas)
-        pontos.append(f"**O relatório do banco não traz nenhum pagamento da folha** ({len(folha_linhas)} lançamentos, {brl(total)}). "
+        pontos.append(f"**O relatório do banco não traz nenhum pagamento da folha** ({len(folha_linhas)} lançamento(s), {brl(total)}). "
                       "Se a folha é paga por outro canal ou relatório, envie-o para completar a conferência.")
     for l in linhas:
         c, f, b = l.conta, l.folha, l.banco
@@ -604,6 +846,12 @@ def _pontos(linhas, banco, folha, proprios, banco_cobre_folha, datas_ok):
         if c and b and b.situacao == "Efetuado" and "aberto" in (c.situacao or "").lower():
             pontos.append(f"**{l.pessoa} — {brl(c.valor)}**: já efetuado no banco e ainda em aberto no Conta Azul; dar baixa.")
 
+    pagos = [l for l in linhas if l.ja_pago]
+    if pagos:
+        pontos.append(f"**Já pagos no banco, sem conta em aberto no contas a pagar** ({brl(_soma(l.banco for l in pagos))}): "
+                      + "; ".join(f"{l.pessoa} ({brl(l.banco.valor)}{', ' + l.banco.data if l.banco.data else ''})"
+                                  for l in pagos)
+                      + ". Confirme se já foram baixados no Conta Azul.")
     fora = [l.conta for l in linhas if l.conta and l.fora_do_periodo]
     if fora:
         pontos.append(f"{len(fora)} conta(s) a pagar ({brl(_soma(fora))}) vencem fora do período do relatório do banco "
@@ -661,27 +909,52 @@ def _tabela(cabecalho: list[str], linhas: list[list[str]], numericas: set[int]) 
     return out + ["| " + " | ".join(l) + " |" for l in linhas]
 
 
+def _resumo_lista(x: dict) -> str:
+    nome = nome_da_lista(x["rotulo"])
+    base = f"**{nome[0].upper() + nome[1:]}** ({x['arquivo']}): {x['itens']} linha(s), {brl(x['total'])}. "
+    if x["modo"] == "pessoa":
+        return base + f"{x['conferem']} de {x['itens']} conferem com o contas a pagar, pessoa a pessoa."
+    if not x["contas"]:
+        return base + f"Nenhum lançamento de {x['rotulo']} no contas a pagar."
+    situacao = ("Confere." if x["total"] == x["soma_contas"]
+                else f"Diferença de **{brl(abs(x['total'] - x['soma_contas']))}**.")
+    return base + (f"No contas a pagar, {brl(x['soma_contas'])} em {x['contas']} lançamento(s), "
+                   f"comparado pelo total. {situacao}")
+
+
 def renderizar(r: Relatorio) -> str:
-    fontes = ["o contas a pagar"] + (["a folha"] if r.tem_folha else []) + (["os agendamentos"] if r.tem_banco else [])
+    rotulos = list(dict.fromkeys(nome_da_lista(x["rotulo"]) for x in r.listas))
+    fontes = (["o contas a pagar"] + (["a folha"] if r.tem_folha else []) + (["os agendamentos"] if r.tem_banco else [])
+              + [f"a {x}" for x in rotulos])
     entre = ", ".join(fontes[:-1]) + " e " + fontes[-1]
-    n_div, n_ok = len(r.divergentes), len(r.linhas) - len(r.divergentes)
-    if n_div:
+    n_div, n_ok = len(r.divergentes), len(r.conferem)
+    if not r.linhas:
+        manchete = "**Não há lançamentos para conferir** com os arquivos enviados."
+    elif n_div:
+        resto = ("" if not n_ok else " O outro pagamento confere." if n_ok == 1
+                 else f" Os outros {n_ok} pagamentos conferem.")
         manchete = (f"A conferência entre {entre} encontrou **{n_div} divergência{'s' if n_div > 1 else ''} "
-                    f"confirmada{'s' if n_div > 1 else ''}**. Os outros {n_ok} pagamentos conferem.")
+                    f"confirmada{'s' if n_div > 1 else ''}**.{resto}")
+    elif n_ok == 1:
+        manchete = f"**Tudo confere.** O pagamento bate entre {entre}."
     else:
         manchete = f"**Tudo confere.** Os {n_ok} pagamentos batem entre {entre}."
     out = [manchete, ""]
 
-    colunas = (["Extrato da folha"] if r.tem_folha else []) + ["Contas a pagar"] + (["Banco"] if r.tem_banco else [])
+    colunas = ((["Extrato da folha"] if r.tem_folha else []) + (["Planilha/lista"] if r.tem_lista else [])
+               + ["Contas a pagar"] + (["Banco"] if r.tem_banco else []))
     if r.divergentes:
         linhas = []
         for l in r.divergentes:
-            vals = ([l.folha.valor if l.folha else None] if r.tem_folha else []) + [l.conta.valor if l.conta else None] \
-                + ([l.banco.valor if l.banco else None] if r.tem_banco else [])
+            lista = l.lista.valor if l.lista else l.soma_lista
+            conta = l.conta.valor if l.conta else l.soma_contas
+            vals = (([l.folha.valor if l.folha else None] if r.tem_folha else []) + ([lista] if r.tem_lista else [])
+                    + [conta] + ([l.banco.valor if l.banco else None] if r.tem_banco else []))
             linhas.append([l.pessoa or "(sem nome)"] + [_v(v) for v in vals] + ["; ".join(d["situacao"] for d in l.divergencias)])
         out += ["### Divergências confirmadas", ""]
         out += _tabela(["Favorecido"] + colunas + ["Situação"], linhas, set(range(1, len(colunas) + 1))) + [""]
 
+    colunas = (["Extrato da folha"] if r.tem_folha else []) + ["Contas a pagar"] + (["Banco"] if r.tem_banco else [])
     linhas = []
     for nome, vf, vc, vb in r.fechamento:
         vals = ([vf] if r.tem_folha else []) + [vc] + ([vb] if r.tem_banco else [])
@@ -692,6 +965,8 @@ def renderizar(r: Relatorio) -> str:
     out += _tabela(["Comparação"] + colunas + ["Diferença"], linhas, set(range(1, len(colunas) + 2))) + [""]
     if r.explicacao:
         out += ["A diferença entre contas a pagar e banco vem de:", ""] + [f"* {t}" for t in r.explicacao] + [""]
+    if r.listas:
+        out += ["### Planilhas e listas", ""] + [f"* {_resumo_lista(x)}" for x in r.listas] + [""]
 
     if r.pontos:
         out += ["### Pontos para confirmar", ""] + [f"* {p}" for p in r.pontos] + [""]

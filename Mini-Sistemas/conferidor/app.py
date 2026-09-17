@@ -12,7 +12,7 @@ import streamlit as st
 
 from conferencia import nome_no_banco, fornecedores_proprios
 from core import brl, conferir, serializar
-from lote import TIPOS_BANCO, conferir_lote, ler_relacoes
+from lote import TIPOS_BANCO, conferir_lote, empresa_do_lote, ler_relacoes, nome_do_tipo
 from mensagem import mensagem_whatsapp, pendencias_antes_de_enviar
 
 ROOT = Path(__file__).resolve().parent
@@ -23,7 +23,7 @@ st.caption("Contas a pagar × extrato da folha × agendamentos do banco · sem I
 
 with st.sidebar:
     st.header("Documentos")
-    modo = st.radio("Origem dos arquivos", ["Amostras locais", "Enviar PDFs"])
+    modo = st.radio("Origem dos arquivos", ["Amostras locais", "Enviar arquivos"])
     fontes = []
     if modo == "Amostras locais":
         arquivos = sorted((ROOT / "docs_amostra").glob("*.pdf"))
@@ -33,22 +33,26 @@ with st.sidebar:
         for nome, _ in fontes:
             st.caption(nome)
     else:
-        uploads = st.file_uploader("Contas a pagar + agendamentos do banco e/ou extrato da folha",
-                                   type=["pdf"], accept_multiple_files=True)
+        uploads = st.file_uploader("Contas a pagar + agendamentos do banco, extrato da folha e/ou planilhas de VT/VA",
+                                   type=["pdf", "xlsx", "csv", "txt"], accept_multiple_files=True)
         fontes = [(u.name, u.getvalue()) for u in uploads]
+    empresa = st.text_input("Empresa (nome curto)", placeholder="L2H — vazio: usa o nome do arquivo")
     cliente = st.text_input("Cliente no WhatsApp", placeholder="@nome do contato")
     observacoes = st.text_area(
         "Observações (uma por linha)",
         placeholder="A folha de pagamento encontra-se em apuração.\nFornecedor X — boleto ainda não recebido.",
         help="Cada linha vai para a mensagem ao cliente. Se citar a folha em apuração ou um favorecido, "
              "a conferência leva em conta, e o resultado mostra o efeito de cada linha.")
+    dados_texto = st.text_area(
+        "Dados avulsos (VT, VA...)", placeholder="VT\nFulano de Tal - R$ 150,00\nCiclana Souza - R$ 180,00",
+        help="Listas coladas: uma pessoa por linha, com o valor. Uma linha com VT ou VA abre a seção.")
     st.caption("Relações de favorecido já confirmadas, uma por linha: nome no contas a pagar = nome no banco.")
     relacoes_txt = st.text_area("Relações confirmadas", placeholder="Fornecedor Exemplo = Recebedor Exemplo")
     executar = st.button("Conferir", type="primary", width="stretch")
 
 # Alterar qualquer entrada invalida o resultado anterior.
 assinatura = sha256(repr(([(n, sha256(b).hexdigest()) for n, b in fontes],
-                          cliente, observacoes, relacoes_txt)).encode()).hexdigest()
+                          cliente, empresa, observacoes, relacoes_txt, dados_texto)).encode()).hexdigest()
 if st.session_state.get("assinatura") != assinatura:
     st.session_state.pop("resultado", None)
 
@@ -61,7 +65,7 @@ if executar:
     else:
         inicio = perf_counter()
         with st.spinner("Lendo os PDFs, validando totais e conferindo..."):
-            lote = conferir_lote(fontes, relacoes, observacoes)
+            lote = conferir_lote(fontes, relacoes, observacoes, dados_texto)
             docs, erros, relatorio, detalhes = lote.docs, lote.erros, lote.relatorio, {}
             if relatorio:
                 contas = [d for d in docs if d.tipo == "contas"]
@@ -78,7 +82,8 @@ if executar:
                     detalhes["Folha × banco"] = conferir(folha, banco, relacoes, True)
             st.session_state.resultado = {"docs": docs, "erros": erros, "relatorio": relatorio,
                                           "comparacoes": detalhes, "segundos": perf_counter() - inicio,
-                                          "observacoes": observacoes, "relacoes": relacoes, "cliente": cliente}
+                                          "observacoes": observacoes, "relacoes": relacoes, "cliente": cliente,
+                                          "empresa": empresa.strip() or empresa_do_lote(lote)}
             st.session_state.assinatura = assinatura
 
 r = st.session_state.get("resultado")
@@ -98,7 +103,7 @@ for e in r["erros"]:
     st.error(e)
 if rel:
     st.success("Leitura e totais validados.")
-    if any(not d.cnpj for d in r["docs"]):
+    if any(not d.cnpj for d in r["docs"] if d.tipo != "lista"):
         st.warning("Há relatório sem CNPJ no cabeçalho. Confirme que é da mesma empresa; o nome do arquivo não comprova.")
 
 tabs = st.tabs(["Conferência", "Auditoria detalhada", "Dados e evidências", "Exportar"])
@@ -113,7 +118,7 @@ with tabs[0]:
         if pendencias:
             st.warning("Antes de enviar, resolva ou explique nas observações:\n\n" + "\n".join(f"- {p}" for p in pendencias))
         st.caption("Copie pelo ícone no canto do quadro.")
-        st.code(mensagem_whatsapp(rel, r["cliente"]), language=None)
+        st.code(mensagem_whatsapp(rel, r["cliente"], empresa=r["empresa"]), language=None)
     else:
         st.info("Corrija os erros acima para ver a conferência.")
 with tabs[1]:
@@ -136,7 +141,7 @@ with tabs[1]:
             vista.append(y)
         st.dataframe(vista, hide_index=True, width="stretch")
 with tabs[2]:
-    st.dataframe([{"Arquivo": d.arquivo, "Layout": d.tipo, "Registros": len(d.itens), "Soma lida": brl(d.total),
+    st.dataframe([{"Arquivo": d.arquivo, "Layout": nome_do_tipo(d), "Registros": len(d.itens), "Soma lida": brl(d.total),
                    "Total impresso": brl(d.total_impresso) if d.total_impresso is not None else "Ausente",
                    "Controle": "Validado" if d.integro else "Bloqueado", "Período": " a ".join(d.periodo)}
                   for d in r["docs"]], hide_index=True, width="stretch")
