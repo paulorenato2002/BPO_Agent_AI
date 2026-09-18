@@ -533,6 +533,8 @@ def conferir_tres(contas: Documento, banco: Documento | None = None, folha: Docu
     _efeito_observacoes(lidas, linhas, folha_em_apuracao)
 
     pontos = _pontos(linhas, banco, folha, proprios, banco_cobre_folha or folha_em_apuracao, datas_ok)
+    # O que os próprios relatórios avisam (ex.: filtro que deixou contas de fora) vem primeiro.
+    pontos[:0] = [f"**Atenção:** {a}" for d in (contas, banco, folha, *listas) if d for a in d.avisos]
     if folha_fora:
         pontos.insert(0, f"O extrato da folha não entrou: o período do contas a pagar ({' a '.join(contas.periodo)}) "
                          f"não inclui dia de pagamento da folha (dia {DIA_FOLHA_INICIO} ao dia {DIA_FOLHA_FIM:02d}).")
@@ -866,7 +868,12 @@ def _pontos(linhas, banco, folha, proprios, banco_cobre_folha, datas_ok):
                                ("banco", banco.itens if banco else [], nome_do_banco)):
         vistos = set()
         for i in itens:
-            chave = (norm(nome(i)), i.valor)
+            # Mesmo favorecido e valor em datas diferentes é parcela, não duplicidade.
+            chave = (norm(nome(i)), i.valor, i.data)
+            if fonte == "contas a pagar":
+                # Parcelas diferentes (2/3 e 3/3) de mesmo valor também não.
+                parcela = re.match(r"^\s*(\d+\s*/\s*\d+)", i.descricao or "")
+                chave += (parcela[1].replace(" ", "") if parcela else "",)
             if chave[0] and chave in vistos:
                 duplicados.append(f"{nome(i)} ({brl(i.valor)}, {fonte})")
             vistos.add(chave)

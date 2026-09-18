@@ -109,3 +109,38 @@ def test_relacao_explicita():
 def test_pdf_invalido():
     with pytest.raises(ValueError):
         ler_pdf("falso.pdf", b"not a pdf")
+
+
+# ------------------------------------------------------------------ filtro rápido do Conta Azul
+
+def _contas_filtradas(valores):
+    from core import Documento, Item
+    return Documento("contas.pdf", "h", "contas", 1,
+                     [Item(str(n), "FORNECEDOR", v) for n, v in enumerate(valores, 1)],
+                     total_impresso=sum(valores) + 1234500)
+
+
+def test_filtro_a_vencer_fecha_pelo_quadro_e_avisa_o_que_ficou_de_fora():
+    from core import _conferir_filtro_rapido
+    d = _contas_filtradas([5000000])
+    baldes = {"Vencidos": 0, "Vencem hoje": 1234500, "A vencer": 5000000, "Pagos": 0}
+    _conferir_filtro_rapido(d, baldes, "A vencer")
+    assert d.total_impresso == 5000000
+    assert d.integro
+    assert "vencem hoje R$ 12.345,00" in d.avisos[0] and "NÃO foram conferidas" in d.avisos[0]
+
+
+def test_filtro_nao_salva_leitura_errada():
+    from core import _conferir_filtro_rapido
+    d = _contas_filtradas([4999990])            # soma lida não bate com o quadro "A vencer"
+    impresso = d.total_impresso
+    _conferir_filtro_rapido(d, {"Vencidos": 0, "Vencem hoje": 1234500, "A vencer": 5000000, "Pagos": 0}, "A vencer")
+    assert d.total_impresso == impresso and not d.avisos
+
+
+def test_filtro_desconhecido_nao_muda_nada():
+    from core import _conferir_filtro_rapido
+    d = _contas_filtradas([5000000])
+    impresso = d.total_impresso
+    _conferir_filtro_rapido(d, {"Vencidos": 0, "Vencem hoje": 1234500, "A vencer": 5000000, "Pagos": 0}, "Categoria X")
+    assert d.total_impresso == impresso and not d.avisos

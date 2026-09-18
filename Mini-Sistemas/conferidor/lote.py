@@ -123,7 +123,7 @@ def para_json(lote: Lote, cliente: str = "", empresa: str = "") -> dict:
     if r is None:
         return saida
     empresa = (empresa or "").strip() or empresa_do_lote(lote)
-    avisos = []
+    avisos = [a for d in lote.docs for a in d.avisos]
     if any(not d.cnpj for d in lote.docs if d.tipo != "lista"):
         avisos.append("Há relatório sem CNPJ no cabeçalho. Confirme que é da mesma empresa; o nome do arquivo não comprova.")
     if not empresa:

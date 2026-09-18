@@ -103,6 +103,9 @@ for e in r["erros"]:
     st.error(e)
 if rel:
     st.success("Leitura e totais validados.")
+    for d in r["docs"]:
+        for a in d.avisos:
+            st.warning(a)
     if any(not d.cnpj for d in r["docs"] if d.tipo != "lista"):
         st.warning("Há relatório sem CNPJ no cabeçalho. Confirme que é da mesma empresa; o nome do arquivo não comprova.")
 

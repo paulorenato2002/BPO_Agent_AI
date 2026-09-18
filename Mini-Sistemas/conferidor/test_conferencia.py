@@ -347,17 +347,13 @@ def test_lista_sem_rotulo_confere_com_todas_as_contas():
     assert "a lista enviada" in r.markdown()
 
 
-def novos():
-    pasta = AMOSTRAS / "novos"
-    arq = pasta / "esperado.json"
-    if not arq.exists():
-        pytest.skip("Amostras privadas não instaladas (não versionadas).")
-    return pasta, json.loads(arq.read_text(encoding="utf-8"))
-
-
 def test_amostras_novas():
-    pasta, esperado = novos()
-    for caso in esperado:
+    """Cada subpasta de docs_amostra com esperado.json é um caso real (fora do git)."""
+    casos = [(arq.parent, caso) for arq in sorted(AMOSTRAS.glob("*/esperado.json"))
+             for caso in json.loads(arq.read_text(encoding="utf-8"))]
+    if not casos:
+        pytest.skip("Amostras privadas não instaladas (não versionadas).")
+    for pasta, caso in casos:
         ds = {}
         for nome in caso["arquivos"]:
             d = ler_pdf(nome, (pasta / nome).read_bytes())
@@ -367,3 +363,24 @@ def test_amostras_novas():
         assert obtidas == sorted(caso["divergencias"]), caso["nome"]
         assert sum(l.ja_pago for l in r.linhas) == caso["ja_pagos"], caso["nome"]
         assert not any("sem explicação" in t for t in r.explicacao), caso["nome"]
+        assert len(ds["contas"].avisos) == caso.get("avisos_contas", 0), caso["nome"]
+
+
+def test_parcelas_de_mesmo_valor_nao_sao_duplicidade():
+    c = doc("contas", [conta("1", "2/3 - Compra de produto", 41500, "Materiais", "COMERCIAL EXEMPLO", "18/09/2026"),
+                       conta("2", "3/3 - Compra de produto", 41500, "Materiais", "COMERCIAL EXEMPLO", "27/09/2026")],
+            ["18/09/2026", "27/09/2026"])
+    b = doc("itau", [banco("1", "COMERCIAL EXEMPLO", 41500, data="18/09/2026"),
+                     banco("2", "COMERCIAL EXEMPLO", 41500, data="27/09/2026")], ["18/09/2026", "27/09/2026"])
+    r = conferir_tres(c, b)
+    assert not any("duplicidade" in p for p in r.pontos)
+    repetida = doc("contas", c.itens + [conta("3", "3/3 - Compra de produto", 41500, "Materiais",
+                                              "COMERCIAL EXEMPLO", "27/09/2026")], c.periodo)
+    assert any("duplicidade" in p for p in conferir_tres(repetida, b).pontos)
+
+
+def test_aviso_do_relatorio_vem_primeiro_nos_pontos():
+    c = doc("contas", [conta("1", "Aluguel", 26500, "Aluguel", "IMOVEIS SOL", "20/09/2026")], QUINZENA)
+    c.avisos.append("Relatório gerado com filtro.")
+    b = doc("itau", [banco("1", "IMOVEIS SOL", 26500, data="20/09/2026")], QUINZENA)
+    assert conferir_tres(c, b).pontos[0] == "**Atenção:** Relatório gerado com filtro."

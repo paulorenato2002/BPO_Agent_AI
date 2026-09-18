@@ -53,6 +53,9 @@ class Documento:
     periodo: list[str] = field(default_factory=list)
     alertas: list[str] = field(default_factory=list)
     rotulo: str = ""
+    # O que o operador precisa saber mas não impede a conferência
+    # (ex.: relatório gerado com filtro que deixou contas de fora).
+    avisos: list[str] = field(default_factory=list)
 
     @property
     def total(self):
@@ -65,6 +68,46 @@ class Documento:
 
 def _crop(page, x0, y0, x1, y1):
     return " ".join((page.crop((x0, max(0, y0), x1, min(page.height, y1))).extract_text() or "").split())
+
+
+# Quadro do cabeçalho do relatório do Conta Azul. O "Total do Período" é a soma
+# dos quatro, independentemente do filtro aplicado à lista.
+BALDES_CONTA_AZUL = ("Vencidos", "Vencem hoje", "A vencer", "Pagos")
+FILTROS_RAPIDOS = {
+    "A VENCER": ("A vencer",),
+    "VENCEM HOJE": ("Vencem hoje",),
+    "VENCIDOS": ("Vencidos",),
+    "PAGOS": ("Pagos",),
+    "EM ABERTO": ("Vencidos", "Vencem hoje", "A vencer"),
+}
+
+
+def _conferir_filtro_rapido(doc: "Documento", baldes: dict[str, int], filtro: str) -> None:
+    """Relatório do Conta Azul gerado com "Filtro rápido".
+
+    A lista traz só as contas do filtro, mas o "Total do Período" impresso
+    continua somando todas. Sem isto a leitura, que está certa, era bloqueada
+    como "total que não fecha" — e as contas que o filtro deixou de fora não
+    apareciam em lugar nenhum.
+
+    Só aceita quando a soma lida bate EXATAMENTE com os quadros do filtro; aí o
+    total de controle passa a ser o do filtro e o que ficou de fora vira aviso.
+    """
+    cobertos = FILTROS_RAPIDOS.get(norm(filtro))
+    if not cobertos or any(k not in baldes for k in cobertos):
+        return
+    if sum(baldes[k] for k in cobertos) != doc.total:
+        return
+    fora = [(k, v) for k, v in baldes.items() if k not in cobertos and v]
+    impresso = doc.total_impresso
+    doc.total_impresso = doc.total
+    if fora:
+        doc.avisos.append(
+            f"O relatório de contas a pagar foi gerado com o filtro \"{filtro}\": a lista traz só essas contas "
+            f"({brl(doc.total)}). Ficaram de fora e NÃO foram conferidas: "
+            + "; ".join(f"{k.lower()} {brl(v)}" for k, v in fora)
+            + f" (total do período no relatório: {brl(impresso)}). "
+            "Para conferir tudo, gere o relatório sem o filtro rápido.")
 
 
 def ler_pdf(nome: str, dados: bytes) -> Documento:
@@ -93,6 +136,9 @@ def ler_pdf(nome: str, dados: bytes) -> Documento:
             doc.total_impresso = cents(total[1]) if total else None
             qt = re.search(r"De " + DATE + " a " + DATE + r" (\d+) ", texto)
             doc.quantidade_impressa = int(qt[1]) if qt else None
+            baldes = {k: cents(m[1]) for k in BALDES_CONTA_AZUL
+                      if (m := re.search(re.escape(k) + r" \(R\$\) (" + MONEY + ")", head))}
+            filtro = re.search(r"Filtro r[áa]pido\s*:\s*(.+)", texto)
             for pn, page in enumerate(pdf.pages, 1):
                 words = page.extract_words()
                 header = next((w for w in words if w["text"] == "Vencimento"), None)
@@ -189,6 +235,8 @@ def ler_pdf(nome: str, dados: bytes) -> Documento:
                 doc.total_impresso, doc.quantidade_impressa = cents(total[1]), int(total[2])
         else:
             doc.alertas.append("Layout não suportado. Não foi tentada conciliação genérica.")
+        if tipo == "contas" and doc.total_impresso is not None and doc.total != doc.total_impresso:
+            _conferir_filtro_rapido(doc, baldes, filtro[1].strip() if filtro else "")
         if doc.total_impresso is None:
             doc.alertas.append("Total de controle não localizado.")
         elif doc.total != doc.total_impresso:
